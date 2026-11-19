@@ -7,6 +7,7 @@ import Foundation
 /// - encrypt the request, wrap it in a `Packet`, and write it through the link;
 /// - reassemble inbound bytes into packets, match the response by sequence,
 ///   verify and decrypt it;
+/// - decrypt unsolicited `event` frames and publish them on `events`;
 /// - bound every request with a timeout so a silent peripheral cannot hang a
 ///   caller.
 ///
@@ -28,8 +29,23 @@ public final class EncryptedSession: @unchecked Sendable {
     private let codec = PacketCodec()
     private let inbound: AsyncStream<Data>
 
+    /// Decrypted unsolicited events, in arrival order.
+    ///
+    /// **Single consumer**, same rule as `BLELink.inbound`: `AsyncStream` shares
+    /// one buffer between iterators. `DeviceSession` is the intended reader.
+    ///
+    /// The stream finishes when the session closes or the link ends. Events that
+    /// fail authentication never reach it; they are logged and dropped so one
+    /// corrupt frame cannot tear down the session.
+    public let events: AsyncStream<SessionEvent>
+    private let eventContinuation: AsyncStream<SessionEvent>.Continuation
+
     private let lock = NSLock()
     private var pending: Pending?
+    /// Sequence taken by a caller that has not installed its continuation yet.
+    /// Visible to other callers under the same lock, which closes the window
+    /// where two concurrent `request()` calls both observe `pending == nil`.
+    private var reservedSequence: UInt32?
     private var nextSequence: UInt32 = 1
     private var started = false
     private var closed = false
@@ -46,11 +62,30 @@ public final class EncryptedSession: @unchecked Sendable {
         self.timeout = timeout
         self.logStore = logStore
         self.inbound = link.inbound
+
+        let (events, continuation) = AsyncStream<SessionEvent>.makeStream()
+        self.events = events
+        self.eventContinuation = continuation
+
         precondition(timeout > .zero, "A session needs a positive timeout")
     }
 
     public var algorithm: CryptoAlgorithm {
         cryptoLock.withLock { crypto.algorithm }
+    }
+
+    /// Largest plaintext accepted by `request(_:)` with the current provider.
+    public var maxPlaintextLength: Int {
+        cryptoLock.withLock { crypto.maxPlaintextLength }
+    }
+
+    /// Starts the receive loop without sending a request.
+    ///
+    /// `request(_:)` starts it implicitly. Call this when the peripheral may
+    /// push events before the first request (telemetry, status), otherwise those
+    /// frames would sit unread in `inbound`.
+    public func start() {
+        startIfNeeded()
     }
 
     /// Swaps the provider without restarting the receive loop.
@@ -70,6 +105,9 @@ public final class EncryptedSession: @unchecked Sendable {
         startIfNeeded()
 
         let provider = cryptoLock.withLock { crypto }
+        guard payload.count <= provider.maxPlaintextLength else {
+            throw SessionError.payloadTooLarge(max: provider.maxPlaintextLength)
+        }
 
         let sealed: Data
         do {
@@ -83,6 +121,7 @@ public final class EncryptedSession: @unchecked Sendable {
         do {
             frame = try codec.encode(Packet(kind: .request, sequence: sequence, payload: sealed))
         } catch let error as PacketError {
+            releaseReservation(sequence)
             throw SessionError.framing(error)
         }
 
@@ -101,12 +140,23 @@ public final class EncryptedSession: @unchecked Sendable {
                 self.finish(.failure(SessionError.timedOut), onlyIfSequence: sequence)
             }
 
-            lock.withLock {
+            // Promote the reservation to a real pending slot atomically. Two
+            // callers can no longer overwrite each other, and if the session
+            // closed in between the caller is resumed instead of leaking.
+            let admitted = lock.withLock { () -> Bool in
+                guard !closed, reservedSequence == sequence else { return false }
+                reservedSequence = nil
                 pending = Pending(
                     sequence: sequence,
                     continuation: continuation,
                     timeoutTask: timeoutTask
                 )
+                return true
+            }
+            guard admitted else {
+                timeoutTask.cancel()
+                continuation.resume(throwing: SessionError.closed)
+                return
             }
 
             Task { [weak self] in
@@ -127,11 +177,13 @@ public final class EncryptedSession: @unchecked Sendable {
         let alreadyClosed = lock.withLock { () -> Bool in
             let wasClosed = closed
             closed = true
+            reservedSequence = nil
             return wasClosed
         }
         guard !alreadyClosed else { return }
 
         finish(.failure(SessionError.closed))
+        eventContinuation.finish()
         let task = lock.withLock { () -> Task<Void, Never>? in
             let task = receiveTask
             receiveTask = nil
@@ -181,8 +233,12 @@ public final class EncryptedSession: @unchecked Sendable {
         }
 
         // The link ended: nothing else can arrive.
-        lock.withLock { closed = true }
+        lock.withLock {
+            closed = true
+            reservedSequence = nil
+        }
         finish(.failure(SessionError.closed))
+        eventContinuation.finish()
         logStore?.log(.info, .session, "Inbound stream finished")
     }
 
@@ -223,7 +279,32 @@ public final class EncryptedSession: @unchecked Sendable {
             }
 
         case .event:
-            logStore?.log(.debug, .session, "Event #\(packet.sequence) ignored")
+            let provider = cryptoLock.withLock { crypto }
+            do {
+                let plaintext = try provider.decrypt(packet.payload)
+                logStore?.log(
+                    .debug,
+                    .receive,
+                    "Decrypted event #\(packet.sequence) · \(plaintext.count) B",
+                    payload: plaintext
+                )
+                eventContinuation.yield(
+                    SessionEvent(sequence: packet.sequence, payload: plaintext)
+                )
+            } catch let error as CryptoError {
+                // A bad event is a bad event, not a reason to close the session.
+                logStore?.log(
+                    .error,
+                    .session,
+                    "Event #\(packet.sequence) rejected: \(error)"
+                )
+            } catch {
+                logStore?.log(
+                    .error,
+                    .session,
+                    "Event #\(packet.sequence) rejected: malformed envelope"
+                )
+            }
 
         case .request, .raw:
             logStore?.log(
@@ -245,9 +326,10 @@ public final class EncryptedSession: @unchecked Sendable {
     private func reserveSequence() throws -> UInt32 {
         let reservation = lock.withLock { () -> Reservation in
             if closed { return .closed }
-            guard pending == nil else { return .busy }
+            guard pending == nil, reservedSequence == nil else { return .busy }
             let sequence = nextSequence
             nextSequence = sequence == .max ? 1 : sequence + 1
+            reservedSequence = sequence
             return .reserved(sequence)
         }
 
@@ -258,6 +340,14 @@ public final class EncryptedSession: @unchecked Sendable {
             throw SessionError.busy
         case .closed:
             throw SessionError.closed
+        }
+    }
+
+    /// Gives a reserved sequence back after a local failure (framing), so the
+    /// session does not stay permanently `busy`.
+    private func releaseReservation(_ sequence: UInt32) {
+        lock.withLock {
+            if reservedSequence == sequence { reservedSequence = nil }
         }
     }
 
@@ -279,5 +369,6 @@ public final class EncryptedSession: @unchecked Sendable {
     deinit {
         pending?.timeoutTask.cancel()
         pending?.continuation.resume(throwing: SessionError.closed)
+        eventContinuation.finish()
     }
 }

@@ -5,6 +5,8 @@ public enum SessionError: Error, Equatable, Sendable {
     case busy
     /// No response arrived before the timeout.
     case timedOut
+    /// The plaintext is larger than the selected cipher can seal into one frame.
+    case payloadTooLarge(max: Int)
     /// The session or the underlying link was closed.
     case closed
     /// A response arrived for a different sequence number.

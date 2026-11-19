@@ -236,16 +236,19 @@ final class EchoResponder: @unchecked Sendable {
     private let crypto: any CryptoProvider
     private let transform: @Sendable (Data) -> Data
     private let splitInto: Int?
+    private let replyDelay: Duration?
 
     init(
         link: FakeBLELink,
         crypto: any CryptoProvider,
         splitInto: Int? = nil,
+        replyDelay: Duration? = nil,
         transform: @escaping @Sendable (Data) -> Data = { $0 }
     ) {
         self.link = link
         self.crypto = crypto
         self.splitInto = splitInto
+        self.replyDelay = replyDelay
         self.transform = transform
     }
 
@@ -264,11 +267,24 @@ final class EchoResponder: @unchecked Sendable {
                   Packet(kind: .response, sequence: packet.sequence, payload: sealed)
               ) else { return }
 
-        if let splitInto, splitInto > 0, splitInto < response.count {
-            link.emit(response.prefix(splitInto))
-            link.emit(response.suffix(from: splitInto))
+        let deliver: @Sendable () -> Void = { [splitInto] in
+            if let splitInto, splitInto > 0, splitInto < response.count {
+                link.emit(response.prefix(splitInto))
+                link.emit(response.suffix(from: splitInto))
+            } else {
+                link.emit(response)
+            }
+        }
+
+        if let replyDelay {
+            // Lets a burst of concurrent callers pile up before the first
+            // response resolves, which makes "one winner" deterministic.
+            Task {
+                try? await Task.sleep(for: replyDelay)
+                deliver()
+            }
         } else {
-            link.emit(response)
+            deliver()
         }
     }
 }

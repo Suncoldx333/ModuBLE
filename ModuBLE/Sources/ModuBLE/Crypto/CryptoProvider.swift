@@ -33,6 +33,26 @@ public protocol CryptoProvider: Sendable {
     var algorithm: CryptoAlgorithm { get }
     func encrypt(_ plaintext: Data) throws -> Data
     func decrypt(_ ciphertext: Data) throws -> Data
+    /// Largest plaintext that still fits in one packet payload after sealing.
+    var maxPlaintextLength: Int { get }
+}
+
+extension CryptoProvider {
+    /// Derived from the documented envelope layouts, so a provider that keeps
+    /// the standard framing needs no extra code and one that does not can
+    /// override it.
+    public var maxPlaintextLength: Int {
+        let capacity = PacketCodec.maxPayloadLength
+        switch algorithm {
+        case .aes128GCM:
+            return capacity - (1 + AESGCMProvider.nonceLength + AESGCMProvider.tagLength)
+        case .aes128CBCHMAC:
+            // PKCS#7 always adds 1…16 bytes, so the padded ciphertext must fit
+            // in a whole number of blocks below the capacity.
+            let usable = capacity - (1 + AESCBCProvider.ivLength + AESCBCProvider.tagLength)
+            return usable / CBCPrimitive.blockSize * CBCPrimitive.blockSize - 1
+        }
+    }
 }
 
 public enum CryptoError: Error, Equatable, Sendable {

@@ -24,16 +24,20 @@ BLEPro/
 │   │   ├── Session/                加密请求/响应会话
 │   │   ├── Logging/                结构化事件日志
 │   │   └── Demo/                   公开的测试密钥（明确标注）
-│   ├── Tests/ModuBLETests/         83 个 XCTest
+│   ├── Tests/ModuBLETests/         98 个 XCTest
 │   └── Documentation/
 │       ├── Peripheral-GATT.md      外设契约与协议定义
 │       └── Device-Verification.md  真机验收清单与已验证记录
 ├── bleProject/
 │   ├── ModuBLEDemo.xcodeproj       iPhone Demo（只调用 SDK 公共接口）
-│   ├── BLEPeripheralApp.xcodeproj  macOS 参考外设（复用 SDK 做加解密）
-│   └── build/                      历史构建产物，可忽略
-└── ModuBLE_项目讨论总结.md          项目背景与规划
+│   └── BLEPeripheralApp.xcodeproj  macOS 参考外设（复用 SDK 做加解密）
+├── .github/workflows/ci.yml        swift test + 两个 App 的无签名构建
+├── LICENSE                         MIT
+└── .gitignore
 ```
+
+> 两个 App 通过 `XCLocalSwiftPackageReference ../ModuBLE` 引用本地包，因此必须保持
+> 仓库内的相对目录结构；只克隆 `ModuBLE` 子目录会无法构建 Demo。
 
 ## 模块职责
 
@@ -53,8 +57,23 @@ BLEPro/
 ```bash
 cd ModuBLE
 swift build
-swift test          # 83 tests
+swift test          # 98 tests
 ```
+
+### 已验证环境
+
+记录于 2026-11-19：
+
+| 项 | 值 |
+|---|---|
+| Swift | 6.4（swiftlang-6.4.0.34.1） |
+| Xcode | 27.0（27A266a） |
+| macOS | 27.0 |
+| `swift test` | 98 passed, 0 failed |
+| `BLEPeripheralApp` | Debug 构建通过（无签名） |
+| `ModuBLEDemo` | iOS Simulator 构建通过（无签名） |
+
+CI（`.github/workflows/ci.yml`）在 `macos-15` 上重复上述三项检查。
 
 真机联调需要两个 App：
 
@@ -114,10 +133,17 @@ let reply = try await session.request(Data("START".utf8))   // → "START_ACK"
 
 // 信封首字节标识格式，切算法不用重连
 session.updateCrypto(try AESCBCProvider(key: DemoTestKey.aes128CBCHMAC))
+
+// 外设主动事件：已分帧、已验签、已解密
+session.start()                     // 只收事件、暂不发请求时先启动接收循环
+for await event in session.events { // 单消费者
+    print(event.sequence, event.payload)
+}
 ```
 
-`EncryptedSession` 负责：加密、分帧、按 sequence 匹配响应、验签解密、超时。
-同一时刻只允许一个在途请求，并发调用返回 `SessionError.busy`。
+`EncryptedSession` 负责：加密、分帧、按 sequence 匹配响应、验签解密、超时、事件分发。
+同一时刻只允许一个在途请求，并发调用返回 `SessionError.busy`——序号预留与 pending 安装
+在同一次加锁中完成，不存在两个调用互相覆盖 continuation 的窗口。
 
 ## 协议
 
@@ -186,7 +212,8 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `GATTProfile` | Service / RX / TX UUID 与写模式配置 |
 | `PacketCodec` / `PacketDecoder` | 单帧编解码 / 流式重组（含 magic 重同步） |
 | `CryptoProvider` | 加密抽象；`AESGCMProvider`、`AESCBCProvider` |
-| `EncryptedSession` | 加密请求/响应会话，带超时与算法切换 |
+| `EncryptedSession` | 加密请求/响应会话，带超时、算法切换、并发占用保护 |
+| `SessionEvent` / `EncryptedSession.events` | 解密后的外设主动事件流（预留，尚未接入 Demo） |
 | `CommunicationLog` / `CommunicationLogStore` | 结构化日志与有界存储 |
 | `BLEError` / `CryptoError` / `SessionError` / `PacketError` | 分层错误，均可比较 |
 
@@ -197,7 +224,8 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 2. **版本字节就是格式标识**（GCM `0x01` / CBC `0x02`），接收方按首字节分发，而不是按
    长度猜。
 3. **单一在途请求**。BLE 写入本来就得串行；只保留一个 pending continuation，"响应错配"
-   这类 bug 在结构上就不可能发生。
+   这类 bug 在结构上就不可能发生。序号预留与 pending 安装在同一把锁内完成，并发调用
+   只会得到 `SessionError.busy`，不会互相覆盖。
 4. **所有等待都有上限**：连接 15 s、发现+订阅 10 s、会话请求由调用方指定。宁可报错，
    也不让调用方永久挂起。
 5. **`inbound` 是单消费者流**，读取字节归 `EncryptedSession`；旁观断连用
@@ -215,8 +243,9 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `Logging` | ✅ 完成 |
 | `BLE` | ✅ 真机验证 |
 | `Session` | ✅ 真机验证 |
+| `Session.events` | ✅ 单测覆盖（外设尚未主动推送） |
 
-83 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
+98 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
 分片重组、中途切换算法）。
 
 **真机已验证**（iPhone ↔ macOS 外设，2026-11-14）：
@@ -239,6 +268,9 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `AESGCMProviderTests` | 往返、Nonce 唯一性、错钥、篡改密文/Nonce/Tag |
 | `AESCBCProviderTests` | NIST 向量、Encrypt-then-MAC 顺序、篡改 IV/密文/MAC、PKCS#7、跨格式拒绝 |
 | `EncryptedSessionTests` | 往返、超时、序号错配、并发拒绝、close 释放、分片重组、中途切换算法 |
+| `EncryptedSessionConcurrencyTests` | 128 并发 × 20 轮的 continuation 泄漏回归、预留释放、close 竞争、超时后复用 |
+| `EncryptedSessionEventTests` | 事件解密分发、事件与响应互不干扰、坏事件丢弃、流终止 |
+| `EncryptedSessionLimitsTests` | GCM/CBC 明文上限、边界请求、超限拒绝、切换算法后的上限 |
 | `BLETypesTests` / `MTUChunkerTests` | 状态与错误映射、切片边界、Data 切片索引 |
 | `BLELinkTests` | 假链路上的帧往返、噪声容忍 |
 | `CommunicationLogStoreTests` | 顺序、容量上限、回调保序 |
@@ -254,11 +286,17 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 5. **单连接**：同一时刻只允许一个活动连接。
 6. **外设侧假设单一 central**：多 central 并发写入时，按 offset 合并可能串包。
 7. **明文回退仍在**：非协议帧会得到 `RX #n: k bytes` 纯文本响应，仅为迁移期兼容，生产应关闭。
-8. **单帧上限 4096 B**：超出直接拒绝，避免损坏的长度字段导致无界分配。
+8. **单帧上限 4096 B**：超出直接拒绝，避免损坏的长度字段导致无界分配。该上限是
+   **信封**长度，因此明文上限为 GCM 4067 B / CBC 4031 B，`EncryptedSession` 会提前
+   返回 `SessionError.payloadTooLarge(max:)`。
+9. **事件流尚未接入 Demo**：`EncryptedSession.events` 已可用，但外设不主动推送，
+   Dashboard / Telemetry 仍属后续阶段。
 
 ## 安全边界
 
-- 不记录密钥、会话凭证或生产明文；日志中的密文 / Nonce / IV 均属测试会话数据。
+- 不记录密钥或会话凭证。
+- 日志会记录**解密后的明文**（响应与事件），仅用于 Demo 诊断；接入真实业务时应关闭
+  或脱敏 payload。日志中的密文 / Nonce / IV 均属测试会话数据。
 - 测试密钥集中在 `DemoTestKey`，命名与注释都明确标注不可用于生产。
 - CBC 在 MAC 校验失败时**不继续解密**；GCM 认证失败时不返回任何明文。
 
@@ -267,6 +305,7 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 - 重放保护（单调序号 + 接收窗口）
 - ECDH + HKDF 动态协商会话密钥
 - 多连接与连接池
+- 事件流接入 Demo：Mock 外设 + Telemetry 仪表盘（`EncryptedSession.events` 已完成）
 - `MockTransport`：无需硬件的端到端回放
 - 应用层可靠传输（滑动窗口、ACK bitmap、选择性重传）
 - 后台恢复与状态保存

@@ -654,6 +654,8 @@ extension DemoModel {
             return "Another encrypted request is still waiting for its response."
         case .timedOut:
             return "The peripheral did not answer the encrypted request in time."
+        case .payloadTooLarge(let max):
+            return "Payload is too large for the current cipher (max \(max) B per request)."
         case .closed:
             return "The encrypted session is closed."
         case .unexpectedResponse(let expected, let received):
