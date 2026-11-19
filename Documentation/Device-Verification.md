@@ -144,6 +144,18 @@ Mac 控制台会标出算法：
 
 再切回 GCM 发一次，确认两种格式可以随时切换且互不干扰。
 
+### 2.11 遥测推送（阶段 6）
+
+1. 连接就绪后点 **START**
+2. 预期：Dashboard 的 Yaw / Pitch / Roll 每秒更新；Mac 面板 `Events sent` 递增，
+   `Yaw / Pitch / Roll` 同步显示同一组数值
+3. 把采样率改到 4 Hz：预期更新变快，Mac 面板的 `Rate` 同步变化
+4. 点 **STOP**：预期数值停止更新，`Events sent` 不再增长
+5. 关闭 Mac 外设：iOS 进入重连，Dashboard 显示连接已断开
+
+> 若这里收不到事件但 `START_ACK` 正常，先看 Mac 面板的 `Streaming` 和
+> `Waiting for a subscribed central.`：没有订阅者时外设不会推送。
+
 ## 3. 判定标准
 
 | 项 | 通过条件 |
@@ -170,6 +182,7 @@ Mac 控制台会标出算法：
 | AES-128-GCM 闭环 | ✅ `START`（5 B）→ 44 B 请求帧 → Mac 解密 → `START_ACK`（9 B）→ 48 B 响应帧 → iPhone 解密 |
 | AES-128-CBC + HMAC 闭环 | ✅ 连接中切换到 CBC（不重连），`START` → 75 B 帧 → `START_ACK` |
 | 加密 + 分包回显 | ✅ 1000 B → 1029 B 信封 → 512+512+15 写入 → 外设回显 → 分片 Notify → 解密后 1000 B 完全一致 |
+| 遥测事件推送 | ⬜ 待验证（Mock 已覆盖；真实链路按 2.11 执行） |
 | 断连重连 | ⬜ 待验证（需 Cmd+Q 退出 Mac App，Stop Advertising 不会断连） |
 
 2026-11-19 复核（未接真机，仅构建与单测）：

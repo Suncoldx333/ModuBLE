@@ -28,6 +28,10 @@
 | Central 订阅 TX 成功 | 立即 Notify 一次 UTF-8 `READY` |
 | 收到**非协议**写入 | 保存字节，并 Notify `RX #<序号>: <字节数> bytes` |
 | 收到**协议帧** | 解密 → 按命令生成响应 → 加密 → Notify **同 sequence** 的 `response` 帧 |
+| 收到 `START` | 回 `START_ACK`，并按 3.3 的频率持续 Notify `event` 帧 |
+| 收到 `STOP` | 回 `STOP_ACK`，停止 `event` 推送 |
+| 收到 `SET_RATE:<hz>` | 回 `RATE:<hz>`，按新频率重建定时器 |
+| 无订阅者 | 暂停 `event` 推送；重新订阅后若仍处于 START 状态则自动恢复 |
 | 收到**无法识别信封**的协议帧 | 不 Notify，本地状态设为 `UNSUPPORTED ENVELOPE`，控制台打印原因 |
 | 协议帧解密/认证失败 | 不 Notify，本地状态设为 `DECRYPT FAIL`，控制台打印原因 |
 | Central 读取 RX | 返回最后一次写入的原始字节 |
@@ -40,7 +44,8 @@
 
 - 写入与分帧：`PeripheralManager.didReceiveWrite`、`ingest(_:)`
 - 协议分发：`PeripheralManager.handle(_:)`
-- 命令语义：`PeripheralManager.respond(to:)`
+- 命令语义：`DemoPeripheralBehavior.handle(_:)`
+- 事件推送：`PeripheralManager.emitTelemetry()`、`startTelemetryTimerIfNeeded()`
 - Notify 队列：`notifyAll(_:)`、`flushPendingNotifications()`
 
 ## 3. 应用层协议
@@ -139,7 +144,7 @@ AES-128-CBC   0x02 | IV (16)           | Ciphertext (n) | HMAC-SHA256 (32)
 
 - 应用层 ACK bitmap、滑动窗口、选择性重传、重试计数。
 - CRC 校验（协议层刻意不做）。
-- 外设主动推送的 Telemetry / 姿态事件：`event` 帧类型、SDK 事件流与 Mock 推送均已
-  实现，Demo Dashboard 已展示；**macOS 外设仍不发送**。
+- 外设主动推送的 Telemetry / 姿态事件：Mock 与 macOS 外设均已实现，Demo Dashboard
+  已展示。**真实 BLE 链路上的事件推送尚未做真机验证**（见 `Device-Verification.md`）。
 - 多 Central 并发写入的隔离保证。
 - 与任何商业量产设备的互操作性认证。

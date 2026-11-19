@@ -1,5 +1,7 @@
 import SwiftUI
 import CoreBluetooth
+import Foundation
+import ModuBLE
 
 struct ContentView: View {
     @ObservedObject var peripheralManager: PeripheralManager
@@ -67,6 +69,10 @@ struct ContentView: View {
                 Divider()
 
                 diagnostics
+
+                Divider()
+
+                telemetryPanel
 
                 Divider()
 
@@ -174,6 +180,79 @@ struct ContentView: View {
     private var lastActivityText: String {
         guard let date = peripheralManager.lastActivityAt else { return "none" }
         return date.formatted(date: .omitted, time: .standard)
+    }
+
+    // MARK: - Telemetry
+
+    private var telemetryPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Telemetry")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            HStack {
+                Text("Streaming")
+                    .font(.caption)
+                Spacer()
+                Text(peripheralManager.telemetryEnabled ? "Yes" : "No")
+                    .font(.caption.monospaced())
+                    .foregroundColor(peripheralManager.telemetryEnabled ? .green : .secondary)
+            }
+
+            HStack {
+                Text("Rate")
+                    .font(.caption)
+                Spacer()
+                Text("\(DemoPeripheralBehavior.format(peripheralManager.telemetryRate)) Hz")
+                    .font(.caption.monospaced())
+                    .foregroundColor(.secondary)
+            }
+
+            HStack {
+                Text("Events sent")
+                    .font(.caption)
+                Spacer()
+                Text("\(peripheralManager.eventsSent)")
+                    .font(.caption.monospaced())
+                    .foregroundColor(peripheralManager.eventsSent == 0 ? .secondary : .primary)
+            }
+
+            if let telemetry = peripheralManager.latestTelemetry {
+                HStack {
+                    Text("Yaw / Pitch / Roll")
+                        .font(.caption)
+                    Spacer()
+                    Text(String(format: "%.1f / %.1f / %.1f",
+                                telemetry.yaw, telemetry.pitch, telemetry.roll))
+                        .font(.caption.monospaced())
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("Battery")
+                        .font(.caption)
+                    Spacer()
+                    Text("\(telemetry.battery) %")
+                        .font(.caption.monospaced())
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Text("No samples yet. Send START from the iPhone, or start locally.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            Button(peripheralManager.telemetryEnabled ? "Stop Telemetry" : "Start Telemetry") {
+                peripheralManager.setTelemetryEnabled(!peripheralManager.telemetryEnabled)
+            }
+            .frame(maxWidth: .infinity)
+            .disabled(peripheralManager.subscriberCount == 0)
+
+            if peripheralManager.subscriberCount == 0 {
+                Text("Waiting for a subscribed central.")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+        }
     }
 
     // MARK: - Helpers

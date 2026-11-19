@@ -42,6 +42,13 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
     @Published var subscriberCount = 0
     @Published var lastStatus: String = "READY"
 
+    // MARK: Telemetry
+
+    @Published var telemetryEnabled = false
+    @Published var telemetryRate: Double = 1
+    @Published var latestTelemetry: Telemetry?
+    @Published var eventsSent = 0
+
     /// Whether the app is holding a power assertion to stay awake and un-napped.
     @Published var keepAwakeActive = false
     /// How many times the watchdog had to revive advertising.
@@ -83,6 +90,15 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
     private var activityToken: NSObjectProtocol?
     private var watchdogTimer: Timer?
 
+    // MARK: Telemetry emission
+
+    private var telemetryTimer: Timer?
+    private var telemetry = TelemetryGenerator()
+    private var nextEventSequence: UInt32 = 1
+    /// The envelope of the last request. Events must be sealed the same way, or
+    /// the central would need a second provider just for events.
+    private var lastProvider: (any CryptoProvider)?
+
     private let maxPackets = 100
     private let watchdogInterval: TimeInterval = 5
 
@@ -109,6 +125,9 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
         self.service = service
         self.characteristic = characteristic
         self.statusCharacteristic = statusCharacteristic
+        // Until a request arrives, assume the default envelope for locally
+        // started telemetry.
+        self.lastProvider = providers[AESGCMProvider.envelopeVersion]
         super.init()
 
         service.characteristics = [characteristic, statusCharacteristic]
@@ -117,6 +136,7 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
 
     deinit {
         watchdogTimer?.invalidate()
+        telemetryTimer?.invalidate()
         endKeepAwake()
         manager.stopAdvertising()
     }
@@ -138,6 +158,7 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
             subscribedCentrals.removeAll()
             subscriberCount = 0
             stopWatchdog()
+            stopTelemetryTimer()
             endKeepAwake()
         }
     }
@@ -181,6 +202,7 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
         subscriberCount = subscribedCentrals.count
         debugLog("central subscribed · subscribers = \(subscriberCount)")
         sendStatus("READY")
+        startTelemetryTimerIfNeeded()
     }
 
     func peripheralManager(_ peripheralManager: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
@@ -189,6 +211,9 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
         subscribedCentrals.removeAll { $0.identifier == central.identifier }
         subscriberCount = subscribedCentrals.count
         debugLog("central unsubscribed · subscribers = \(subscriberCount)")
+        if subscribedCentrals.isEmpty {
+            stopTelemetryTimer()
+        }
     }
 
     func peripheralManagerIsReady(toUpdateSubscribers peripheralManager: CBPeripheralManager) {
@@ -276,6 +301,7 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
         manager.stopAdvertising()
         isAdvertising = false
         stopWatchdog()
+        stopTelemetryTimer()
         endKeepAwake()
     }
 
@@ -399,7 +425,11 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
 
         do {
             let plaintext = try provider.decrypt(packet.payload)
-            let reply = Self.respond(to: plaintext)
+            let behavior = DemoPeripheralBehavior.handle(plaintext)
+            lastProvider = provider
+            apply(behavior.command)
+
+            let reply = behavior.reply
             let sealed = try provider.encrypt(reply)
             let frame = try codec.encode(Packet(kind: .response, sequence: packet.sequence, payload: sealed))
             debugLog(
@@ -413,11 +443,71 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
         }
     }
 
-    /// `START` → `START_ACK`, `PING` → `PONG`, everything else is echoed.
-    /// The command table lives in the SDK so the mock peripheral and this app
-    /// cannot drift apart.
-    private static func respond(to plaintext: Data) -> Data {
-        DemoPeripheralBehavior.handle(plaintext).reply
+    // MARK: - Telemetry emission
+
+    /// UI override: the iPhone normally drives this with `START` / `STOP`.
+    func setTelemetryEnabled(_ enabled: Bool) {
+        telemetryEnabled = enabled
+        if enabled {
+            nextEventSequence = 1
+            startTelemetryTimerIfNeeded()
+        } else {
+            stopTelemetryTimer()
+        }
+        debugLog("telemetry \(enabled ? "started" : "stopped") at \(DemoPeripheralBehavior.format(telemetryRate)) Hz")
+    }
+
+    private func apply(_ command: DemoPeripheralCommand) {
+        switch command {
+        case .startTelemetry:
+            setTelemetryEnabled(true)
+        case .stopTelemetry:
+            setTelemetryEnabled(false)
+        case .setTelemetryRate(let hz):
+            telemetryRate = hz
+            if telemetryEnabled {
+                startTelemetryTimerIfNeeded()
+            }
+            debugLog("telemetry rate → \(DemoPeripheralBehavior.format(hz)) Hz")
+        case .ping, .echo:
+            break
+        }
+    }
+
+    private func startTelemetryTimerIfNeeded() {
+        stopTelemetryTimer()
+        guard telemetryEnabled, !subscribedCentrals.isEmpty else { return }
+
+        let interval = 1 / max(0.2, telemetryRate)
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            self?.emitTelemetry()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        telemetryTimer = timer
+    }
+
+    private func stopTelemetryTimer() {
+        telemetryTimer?.invalidate()
+        telemetryTimer = nil
+    }
+
+    private func emitTelemetry() {
+        guard telemetryEnabled,
+              !subscribedCentrals.isEmpty,
+              let provider = lastProvider else { return }
+
+        let interval = 1 / max(0.2, telemetryRate)
+        let sample = telemetry.next(advancingBy: .seconds(interval))
+        guard let payload = try? TelemetryCodec.encode(sample),
+              let sealed = try? provider.encrypt(payload),
+              let frame = try? codec.encode(
+                  Packet(kind: .event, sequence: nextEventSequence, payload: sealed)
+              ) else { return }
+
+        nextEventSequence = nextEventSequence == .max ? 1 : nextEventSequence + 1
+        latestTelemetry = sample
+        eventsSent += 1
+        notifyAll(frame)
     }
 
     // MARK: - Keep-awake
