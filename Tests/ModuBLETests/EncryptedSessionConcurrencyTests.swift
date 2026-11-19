@@ -257,6 +257,55 @@ final class EncryptedSessionConcurrencyTests: XCTestCase {
         XCTAssertEqual(error as? SessionError, .closed)
     }
 
+    /// Regression: the timer must be armed only after the pending slot exists.
+    ///
+    /// The injected scheduler fires `onTimeout` immediately. If `request` armed
+    /// the timer before installing `pending` (the old order), `finish` would
+    /// find nothing, the timeout would be lost, and this request would stay
+    /// suspended forever. The watchdog turns that into a failure instead of a
+    /// hung suite.
+    func testImmediateTimeoutIsNotLostBeforePendingInstallation() async throws {
+        let link = FakeBLELink()
+        let crypto = try AESGCMProvider(key: gcmKey)
+        let session = EncryptedSession(
+            link: link,
+            crypto: crypto,
+            timeout: .seconds(5),
+            timeoutScheduler: { _, onTimeout in
+                onTimeout()
+                return Task {}
+            }
+        )
+
+        let outcome = OutcomeLog()
+        let request = Task {
+            do {
+                outcome.record(.success(try await session.request(Data("X".utf8))))
+            } catch {
+                outcome.record(.failure(error))
+            }
+        }
+
+        let settled = await Self.waitUntil(timeout: .seconds(1)) {
+            outcome.count == 1
+        }
+        guard settled else {
+            // Old ordering: the immediate timeout ran before the slot existed,
+            // so close the session to release the leaked continuation before
+            // failing the test instead of hanging the suite.
+            request.cancel()
+            await session.close()
+            _ = await request.value
+            return XCTFail("timeout fired before pending installation and was lost")
+        }
+        _ = await request.value
+
+        guard case .failure(let error)? = outcome.results.first else {
+            return XCTFail("expected the request to time out")
+        }
+        XCTAssertEqual(error as? SessionError, .timedOut)
+    }
+
     // MARK: - Helpers
 
     static func waitUntil(

@@ -18,6 +18,17 @@ import Foundation
 /// serialized anyway, and a single pending continuation keeps the matching
 /// logic impossible to get wrong. Concurrent callers get `SessionError.busy`.
 public final class EncryptedSession: @unchecked Sendable {
+    /// Builds the per-request timeout task.
+    ///
+    /// The production implementation sleeps for `timeout` and then calls
+    /// `onTimeout`. Tests inject a scheduler that runs `onTimeout` immediately:
+    /// if the timer were armed before the pending slot exists, that timeout
+    /// would be lost and the request would never settle.
+    typealias TimeoutScheduler = @Sendable (
+        _ timeout: Duration,
+        _ onTimeout: @escaping @Sendable () -> Void
+    ) -> Task<Void, Never>
+
     private struct Pending {
         /// Monotonic identity, allocated with the sequence reservation. It
         /// survives sequence wrap-around, so a response can only ever resolve
@@ -25,7 +36,18 @@ public final class EncryptedSession: @unchecked Sendable {
         let id: UInt64
         let sequence: UInt32
         let continuation: CheckedContinuation<Data, Error>
-        let timeoutTask: Task<Void, Never>
+        /// `nil` between installing the pending slot and arming the timer.
+        /// The ordering is deliberate: a timeout that fires before the slot is
+        /// visible would find nothing to resolve and be lost forever.
+        var timeoutTask: Task<Void, Never>?
+    }
+
+    private static let liveTimeoutScheduler: TimeoutScheduler = { timeout, onTimeout in
+        Task {
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            onTimeout()
+        }
     }
 
     private let link: any BLELink
@@ -59,18 +81,38 @@ public final class EncryptedSession: @unchecked Sendable {
     private var started = false
     private var closed = false
     private var receiveTask: Task<Void, Never>?
+    private let timeoutScheduler: TimeoutScheduler
 
-    public init(
+    public convenience init(
         link: any BLELink,
         crypto: any CryptoProvider,
         timeout: Duration = .seconds(5),
         logStore: CommunicationLogStore? = nil
+    ) {
+        self.init(
+            link: link,
+            crypto: crypto,
+            timeout: timeout,
+            logStore: logStore,
+            timeoutScheduler: Self.liveTimeoutScheduler
+        )
+    }
+
+    /// Designated initializer with an injectable timer factory. Tests use the
+    /// seam to prove the pending slot is installed before the timeout is armed.
+    init(
+        link: any BLELink,
+        crypto: any CryptoProvider,
+        timeout: Duration,
+        logStore: CommunicationLogStore? = nil,
+        timeoutScheduler: @escaping TimeoutScheduler
     ) {
         self.link = link
         self.crypto = crypto
         self.timeout = timeout
         self.logStore = logStore
         self.inbound = link.inbound
+        self.timeoutScheduler = timeoutScheduler
 
         let (events, continuation) = AsyncStream<SessionEvent>.makeStream()
         self.events = events
@@ -141,17 +183,9 @@ public final class EncryptedSession: @unchecked Sendable {
         )
 
         return try await withCheckedThrowingContinuation { continuation in
-            let timeoutTask = Task { [weak self] in
-                guard let self else { return }
-                try? await Task.sleep(for: self.timeout)
-                guard !Task.isCancelled else { return }
-                self.logStore?.log(.warning, .session, "Request #\(sequence) timed out")
-                self.finish(.failure(SessionError.timedOut), onlyIf: requestID)
-            }
-
-            // Promote the reservation to a real pending slot atomically. Two
-            // callers can no longer overwrite each other, and if the session
-            // closed in between the caller is resumed instead of leaking.
+            // Install the pending slot first. `finish` can only resolve a
+            // request it can see, so a timer that fired before this point would
+            // silently do nothing and leave the caller without a timeout.
             let admitted = lock.withLock { () -> Bool in
                 guard !closed,
                       reservedSequence == sequence,
@@ -162,14 +196,32 @@ public final class EncryptedSession: @unchecked Sendable {
                     id: requestID,
                     sequence: sequence,
                     continuation: continuation,
-                    timeoutTask: timeoutTask
+                    timeoutTask: nil
                 )
                 return true
             }
             guard admitted else {
-                timeoutTask.cancel()
                 continuation.resume(throwing: SessionError.closed)
                 return
+            }
+
+            // Only now arm the timer: it is guaranteed to find the pending slot
+            // unless a response, close or write failure finished the request
+            // first, in which case the attach below cancels it.
+            let timeoutTask = timeoutScheduler(timeout) { [weak self] in
+                guard let self else { return }
+                self.logStore?.log(.warning, .session, "Request #\(sequence) timed out")
+                self.finish(.failure(SessionError.timedOut), onlyIf: requestID)
+            }
+
+            let attached = lock.withLock { () -> Bool in
+                guard var current = pending, current.id == requestID else { return false }
+                current.timeoutTask = timeoutTask
+                pending = current
+                return true
+            }
+            if !attached {
+                timeoutTask.cancel()
             }
 
             Task { [weak self] in
@@ -396,7 +448,7 @@ public final class EncryptedSession: @unchecked Sendable {
         }
 
         guard let resolved else { return }
-        resolved.timeoutTask.cancel()
+        resolved.timeoutTask?.cancel()
         resolved.continuation.resume(with: result)
     }
 
@@ -406,7 +458,7 @@ public final class EncryptedSession: @unchecked Sendable {
             pending = nil
             return current
         }
-        resolved?.timeoutTask.cancel()
+        resolved?.timeoutTask?.cancel()
         resolved?.continuation.resume(throwing: SessionError.closed)
         eventContinuation.finish()
     }
