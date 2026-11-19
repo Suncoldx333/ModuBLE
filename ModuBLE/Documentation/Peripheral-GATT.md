@@ -139,7 +139,7 @@ AES-128-CBC   0x02 | IV (16)           | Ciphertext (n) | HMAC-SHA256 (32)
 
 - 应用层 ACK bitmap、滑动窗口、选择性重传、重试计数。
 - CRC 校验（协议层刻意不做）。
-- 外设主动推送的 Telemetry / 姿态事件：`event` 帧类型与 SDK 事件流已实现，
-  **Mock 外设会推送**，但 macOS 外设当前不发送，Demo 界面也尚未接入。
+- 外设主动推送的 Telemetry / 姿态事件：`event` 帧类型、SDK 事件流与 Mock 推送均已
+  实现，Demo Dashboard 已展示；**macOS 外设仍不发送**。
 - 多 Central 并发写入的隔离保证。
 - 与任何商业量产设备的互操作性认证。

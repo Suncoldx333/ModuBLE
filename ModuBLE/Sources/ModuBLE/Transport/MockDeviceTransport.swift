@@ -33,14 +33,13 @@ public final class MockDeviceTransport: DeviceTransport, @unchecked Sendable {
 
     private let profile: GATTProfile
     private let keys: MockKeys
-    private let configuration: MockConfiguration
     private let logStore: CommunicationLogStore?
     private let devices: [DiscoveredDevice]
 
     private let lock = NSLock()
+    private var defaultFaults: FaultConfiguration
     private var scanContinuation: AsyncThrowingStream<[DiscoveredDevice], Error>.Continuation?
     private var currentLink: MockBLELink?
-    private var currentInjector: FaultInjector?
 
     public init(
         profile: GATTProfile = .referencePeripheral,
@@ -50,16 +49,26 @@ public final class MockDeviceTransport: DeviceTransport, @unchecked Sendable {
     ) {
         self.profile = profile
         self.keys = keys
-        self.configuration = configuration
         self.logStore = logStore
         self.devices = Self.makeCatalogue(serviceUUID: profile.serviceUUID)
+        self.maximumWritePayloadLength = configuration.maximumWritePayloadLength
+        self.autoTelemetry = configuration.autoTelemetry
+        self.telemetryTick = configuration.telemetryTick
+        self.defaultFaults = configuration.faults
     }
+
+    private let maximumWritePayloadLength: Int
+    private let autoTelemetry: Bool
+    private let telemetryTick: Duration
 
     // MARK: - DeviceTransport
 
     public func observeBluetoothState() -> AsyncStream<BluetoothState> {
+        // The mock always has a working radio, so a single value is the whole
+        // truth. Finishing avoids leaving a consumer suspended forever.
         AsyncStream { continuation in
             continuation.yield(.poweredOn)
+            continuation.finish()
         }
     }
 
@@ -101,20 +110,20 @@ public final class MockDeviceTransport: DeviceTransport, @unchecked Sendable {
 
         await stopScan()
 
-        let injector = FaultInjector(configuration: configuration.faults)
+        let faults = lock.withLock { defaultFaults }
+        let injector = FaultInjector(configuration: faults)
         let link = MockBLELink(
             device: known,
             peripheral: MockPeripheral(keys: keys),
             injector: injector,
-            maximumWritePayloadLength: configuration.maximumWritePayloadLength,
-            autoTelemetry: configuration.autoTelemetry,
-            telemetryTick: configuration.telemetryTick,
+            maximumWritePayloadLength: maximumWritePayloadLength,
+            autoTelemetry: autoTelemetry,
+            telemetryTick: telemetryTick,
             logStore: logStore
         )
 
         lock.withLock {
             currentLink = link
-            currentInjector = injector
         }
         logStore?.log(.info, .ble, "Mock connected · \(known.displayName)")
         return link
@@ -130,10 +139,14 @@ public final class MockDeviceTransport: DeviceTransport, @unchecked Sendable {
         lock.withLock { currentLink }
     }
 
-    /// Applies a new fault configuration to the live link. No-op when nothing is
-    /// connected; the next connection picks up `configuration.faults`.
+    /// Applies a new fault configuration to the live link **and** remembers it
+    /// for the next connection, so the settings survive a reconnect.
     public func applyFaultConfiguration(_ faults: FaultConfiguration) {
-        lock.withLock { currentInjector }?.configuration = faults
+        let link = lock.withLock { () -> MockBLELink? in
+            defaultFaults = faults
+            return currentLink
+        }
+        link?.injector.configuration = faults
     }
 
     // MARK: - Catalogue

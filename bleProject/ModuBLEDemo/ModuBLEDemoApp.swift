@@ -3,11 +3,11 @@ import SwiftUI
 @main
 struct ModuBLEDemoApp: App {
     @StateObject
-    private var model = DemoModel()
+    private var coordinator = DeviceCoordinator()
 
     var body: some Scene {
         WindowGroup {
-            DemoView(model: model)
+            RootView(coordinator: coordinator)
         }
     }
 }

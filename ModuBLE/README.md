@@ -89,6 +89,24 @@ Demo 里：扫描 → 连接 → Quick Commands 点 `START`，看到 `LAST DECRY
 START_ACK` 即闭环成立。完整步骤见
 [`Documentation/Device-Verification.md`](Documentation/Device-Verification.md)。
 
+## iOS Demo
+
+四个 Tab，Mock 模式无需硬件：
+
+| Tab | 内容 |
+|---|---|
+| Devices | 传输选择、扫描、连接、RSSI、来源标识 |
+| Dashboard | Yaw / Pitch / Roll、电量、uptime、事件计数、采样率 |
+| Logs | 结构化通信日志（Copy / Clear） |
+| Simulator | 延迟、丢帧、认证损坏、坏帧、主动断连、计数器 |
+
+连接后自动发送 `START`，Mock 外设随即按 1 Hz 推送 Telemetry。点进设备还能看到
+Diagnostics：原始发送、Chunk Test、Paced Transfer 与完整日志。
+
+![Devices tab](Documentation/Screenshots/devices.png)
+
+> Demo 需要 iOS 17；SDK 本身声明支持 iOS 16。
+
 ## 用法
 
 ```swift
@@ -305,10 +323,11 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `Logging` | ✅ 完成 |
 | `BLE` | ✅ 真机验证 |
 | `Session` | ✅ 真机验证 |
-| `Session.events` | ✅ 单测覆盖（外设尚未主动推送） |
+| `Session.events` | ✅ 单测覆盖（Mock 推送，Dashboard 已接入） |
 | `Transport` | ✅ `DeviceTransport` + CoreBluetooth 适配 + Mock 传输 |
-| `Telemetry` | ✅ 编解码与数据源（尚未接入 Demo UI） |
+| `Telemetry` | ✅ 编解码、数据源、离线 Dashboard |
 | `DeviceSession` / `DeviceManager` | ✅ 单会话生命周期、事件解析、掉线自动释放 |
+| iOS Demo | ✅ 四个 Tab + Diagnostics，Mock 路径无需硬件 |
 
 156 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
 分片重组、中途切换算法）。
@@ -361,8 +380,8 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 8. **单帧上限 4096 B**：超出直接拒绝，避免损坏的长度字段导致无界分配。该上限是
    **信封**长度，因此明文上限为 GCM 4067 B / CBC 4031 B，`EncryptedSession` 会提前
    返回 `SessionError.payloadTooLarge(max:)`。
-9. **事件流尚未接入 Demo**：`EncryptedSession.events` 与 Mock 外设已可用，
-   Dashboard / 故障面板仍属后续阶段；macOS 外设只响应命令，不主动推送事件。
+9. **macOS 外设不主动推送事件**：Mock 外设会推送 Telemetry，Demo 的 Dashboard
+   已展示；macOS 参考外设目前只响应命令，不发 `event` 帧。
 10. **Mock 不模拟射频细节**：没有 RSSI 抖动、连接参数协商、ATT 拥塞与真实丢包
     模式；故障是按配置注入的确定性事件，不能用来评估无线性能。
 
@@ -379,7 +398,6 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 - 重放保护（单调序号 + 接收窗口）
 - ECDH + HKDF 动态协商会话密钥
 - 多连接与连接池
-- 事件流接入 Demo：Dashboard 仪表盘与故障注入面板（SDK 侧已完成）
 - macOS 外设推送 Telemetry（当前只响应命令，不主动发事件）
 - 应用层可靠传输（滑动窗口、ACK bitmap、选择性重传）
 - 后台恢复与状态保存

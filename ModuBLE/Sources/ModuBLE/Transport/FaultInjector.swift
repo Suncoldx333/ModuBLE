@@ -52,10 +52,17 @@ public struct FaultConfiguration: Sendable, Equatable {
 /// be replayed from a bug report.
 public final class FaultInjector: @unchecked Sendable {
     public struct Counters: Equatable, Sendable {
-        public var dropped = 0
-        public var corrupted = 0
-        public var malformed = 0
-        public var disconnects = 0
+        public var dropped: Int
+        public var corrupted: Int
+        public var malformed: Int
+        public var disconnects: Int
+
+        public init(dropped: Int = 0, corrupted: Int = 0, malformed: Int = 0, disconnects: Int = 0) {
+            self.dropped = dropped
+            self.corrupted = corrupted
+            self.malformed = malformed
+            self.disconnects = disconnects
+        }
     }
 
     private let lock = NSLock()
@@ -66,6 +73,7 @@ public final class FaultInjector: @unchecked Sendable {
     public init(configuration: FaultConfiguration = FaultConfiguration(), seed: UInt64 = 0x5EED_1234_5678_9ABC) {
         self.storage = configuration
         self.rng = SplitMix64(seed: seed)
+        self.storageCounters = Counters()
     }
 
     public var configuration: FaultConfiguration {

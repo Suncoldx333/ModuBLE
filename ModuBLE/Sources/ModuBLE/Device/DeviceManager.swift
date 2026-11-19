@@ -49,6 +49,12 @@ public actor DeviceManager {
         await transport.stopScan()
     }
 
+    /// Abandons an in-flight connection attempt. The transport decides what that
+    /// means; CoreBluetooth cancels the ATT connect, the mock is instantaneous.
+    public func cancelPendingConnection() async {
+        await transport.cancelPendingConnection()
+    }
+
     // MARK: - Connection
 
     /// Connects and returns a ready session.

@@ -1,71 +1,151 @@
 import SwiftUI
 import Foundation
-import Combine
 import UIKit
 import ModuBLE
 
-struct DemoView: View {
-    @ObservedObject var model: DemoModel
+struct RootView: View {
+    @ObservedObject var coordinator: DeviceCoordinator
+
+    var body: some View {
+        TabView {
+            DiscoveryTab(coordinator: coordinator)
+                .tabItem { Label("Devices", systemImage: "antenna.radiowaves.left.and.right") }
+
+            DashboardView(coordinator: coordinator)
+                .tabItem { Label("Dashboard", systemImage: "gauge") }
+
+            LogsView(model: coordinator.diagnostics)
+                .tabItem { Label("Logs", systemImage: "list.bullet.rectangle") }
+
+            SimulatorView(coordinator: coordinator)
+                .tabItem { Label("Simulator", systemImage: "slider.horizontal.3") }
+        }
+    }
+}
+
+// MARK: - Discovery
+
+struct DiscoveryTab: View {
+    @ObservedObject var coordinator: DeviceCoordinator
 
     var body: some View {
         NavigationStack {
             Group {
-                if model.discoveredDevices.isEmpty {
+                if coordinator.devices.isEmpty {
                     ContentUnavailableView {
-                        Label(model.isScanning ? "Scanning…" : "No BLE Devices", systemImage: "dot.radiowaves.left.and.right")
+                        Label(
+                            coordinator.isScanning ? "Scanning…" : "No BLE Devices",
+                            systemImage: "dot.radiowaves.left.and.right"
+                        )
                     } description: {
-                        Text("Run BLEPeripheralApp on the Mac, then tap Scan.")
+                        Text(emptyHint)
                     }
                 } else {
                     deviceList
                 }
             }
-            .navigationTitle("BLE Devices")
+            .navigationTitle("Devices")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(model.isScanning ? "Stop" : "Scan") {
-                        if model.isScanning {
-                            model.stopScan()
+                    Button(coordinator.isScanning ? "Stop" : "Scan") {
+                        if coordinator.isScanning {
+                            coordinator.stopScan()
                         } else {
-                            model.startScan()
+                            coordinator.startScan()
                         }
                     }
-                    .disabled(!model.isBluetoothReady)
+                    .disabled(!coordinator.isBluetoothReady)
                 }
             }
-            .safeAreaInset(edge: .top) {
-                if let problem = model.bluetoothProblem, !model.isBluetoothReady {
-                    Text(problem)
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                        .padding(10)
-                        .frame(maxWidth: .infinity)
-                        .background(Color.orange.opacity(0.12))
-                } else if model.isReconnecting || model.reconnectExhausted {
-                    reconnectBanner
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    transportPicker
+                    if let problem = coordinator.bluetoothProblem, !coordinator.isBluetoothReady {
+                        banner(problem, color: .orange)
+                    } else if !coordinator.isBluetoothReady {
+                        banner("Waiting for Bluetooth…", color: .orange)
+                    } else if coordinator.isReconnecting || coordinator.reconnectExhausted {
+                        reconnectBanner
+                    }
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                if let error = model.lastError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(10)
-                        .frame(maxWidth: .infinity)
-                        .background(.thinMaterial)
+                if let error = coordinator.lastError, !coordinator.isReconnecting {
+                    banner(error, color: .red)
                 }
             }
         }
-        .alert("Reconnect Failed", isPresented: $model.reconnectExhausted) {
-            Button("Reconnect Now") {
-                model.reconnectManually()
-            }
-            Button("Cancel", role: .cancel) {
-                model.cancelReconnection()
-            }
+        .alert(
+            "Reconnect Failed",
+            isPresented: Binding(
+                get: { coordinator.reconnectExhausted },
+                set: { if !$0 { coordinator.cancelReconnection() } }
+            )
+        ) {
+            Button("Reconnect Now") { coordinator.reconnectManually() }
+            Button("Cancel", role: .cancel) { coordinator.cancelReconnection() }
         } message: {
-            Text("Automatic reconnection failed after retries at 1, 2, 4, 8, 16 and 32 seconds. Make sure BLEPeripheralApp is running, then reconnect manually.")
+            Text("Automatic reconnection failed after retries at 1, 2, 4, 8, 16 and 32 seconds. Make sure the peripheral is reachable, then reconnect manually.")
+        }
+    }
+
+    private var emptyHint: String {
+        switch coordinator.transportKind {
+        case .mock:
+            return "Tap Scan. Mock devices need no hardware."
+        case .coreBluetooth:
+            return "Run BLEPeripheralApp on the Mac, then tap Scan."
+        }
+    }
+
+    private var transportPicker: some View {
+        Picker(
+            "Transport",
+            selection: Binding(
+                get: { coordinator.transportKind },
+                set: { coordinator.selectTransport($0) }
+            )
+        ) {
+            ForEach(TransportKind.allCases, id: \.self) { kind in
+                Text(kind.label).tag(kind)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    private var deviceList: some View {
+        List {
+            Section {
+                ForEach(coordinator.devices) { device in
+                    NavigationLink {
+                        DiagnosticsView(
+                            coordinator: coordinator,
+                            model: coordinator.diagnostics,
+                            device: device
+                        )
+                    } label: {
+                        DeviceRowView(
+                            device: device,
+                            source: coordinator.transportKind,
+                            isConnected: coordinator.connectedDevice?.id == device.id
+                                && coordinator.connectionState == .ready,
+                            isReconnecting: coordinator.isReconnecting
+                                && coordinator.connectedDevice?.id == device.id
+                        )
+                    }
+                }
+            } footer: {
+                Text("Tap a device to connect, send a custom packet and watch its telemetry.")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .refreshable {
+            coordinator.stopScan()
+            coordinator.startScan()
         }
     }
 
@@ -74,18 +154,18 @@ struct DemoView: View {
             Image(systemName: "arrow.clockwise")
                 .foregroundColor(.orange)
 
-            if let nextAttemptAt = model.reconnectNextAttemptAt {
+            if let nextAttemptAt = coordinator.reconnectNextAttemptAt {
                 TimelineView(.periodic(from: .now, by: 0.1)) { context in
                     Text(String(
                         format: "Reconnecting %d/%d · next in %.1f s",
-                        model.reconnectAttempt,
-                        model.reconnectDelays.count,
+                        coordinator.reconnectAttempt,
+                        coordinator.reconnectDelays.count,
                         max(0, nextAttemptAt.timeIntervalSince(context.date))
                     ))
                     .font(.caption)
                 }
-            } else if model.isReconnecting {
-                Text("Reconnecting \(model.reconnectAttempt)/\(model.reconnectDelays.count) · connecting…")
+            } else if coordinator.isReconnecting {
+                Text("Reconnecting \(coordinator.reconnectAttempt)/\(coordinator.reconnectDelays.count) · connecting…")
                     .font(.caption)
             } else {
                 Text("Reconnect failed · reconnect manually")
@@ -94,11 +174,9 @@ struct DemoView: View {
 
             Spacer()
 
-            if model.isReconnecting {
-                Button("Stop") {
-                    model.cancelReconnection()
-                }
-                .font(.caption)
+            if coordinator.isReconnecting {
+                Button("Stop") { coordinator.cancelReconnection() }
+                    .font(.caption)
             }
         }
         .padding(.horizontal, 16)
@@ -107,36 +185,19 @@ struct DemoView: View {
         .background(Color.orange.opacity(0.12))
     }
 
-    private var deviceList: some View {
-        List {
-            Section {
-                ForEach(model.discoveredDevices) { device in
-                    NavigationLink {
-                        DeviceDetailView(model: model, device: device)
-                    } label: {
-                        DeviceRowView(
-                            device: device,
-                            isConnected: model.connectedDevice?.id == device.id
-                                && model.connectionState == .ready,
-                            isReconnecting: model.isReconnecting
-                                && model.connectedDevice?.id == device.id
-                        )
-                    }
-                }
-            } footer: {
-                Text("Tap a device to connect, send a custom packet and subscribe to its status.")
-            }
-        }
-        .listStyle(.insetGrouped)
-        .refreshable {
-            model.stopScan()
-            model.startScan()
-        }
+    private func banner(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundColor(color)
+            .padding(10)
+            .frame(maxWidth: .infinity)
+            .background(color.opacity(0.12))
     }
 }
 
 struct DeviceRowView: View {
-    let device: DemoModel.DiscoveredDevice
+    let device: DiscoveredDevice
+    let source: TransportKind
     let isConnected: Bool
     let isReconnecting: Bool
 
@@ -147,9 +208,18 @@ struct DeviceRowView: View {
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(device.name ?? device.id.uuidString)
-                    .font(.headline)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(device.name ?? device.id.uuidString)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    Text(source.label)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.15))
+                        .clipShape(Capsule())
+                }
 
                 if isReconnecting {
                     Text("Reconnecting…")
@@ -170,13 +240,6 @@ struct DeviceRowView: View {
                     Label("Not connectable", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption2.bold())
                         .foregroundColor(.red)
-                }
-
-                if !device.advertisedServiceUUIDs.isEmpty {
-                    Text(device.advertisedServiceUUIDs.joined(separator: ", "))
-                        .font(.caption2.monospaced())
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
                 }
             }
         }
@@ -202,9 +265,12 @@ struct DeviceRowView: View {
     }
 }
 
-struct DeviceDetailView: View {
+// MARK: - Diagnostics
+
+struct DiagnosticsView: View {
+    @ObservedObject var coordinator: DeviceCoordinator
     @ObservedObject var model: DemoModel
-    let device: DemoModel.DiscoveredDevice
+    let device: DiscoveredDevice
 
     @State private var payload = "Hello from ModuBLEDemo"
     @State private var isHexInput = false
@@ -225,33 +291,37 @@ struct DeviceDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Sections
-
     private var isActiveDevice: Bool {
-        model.connectedDevice?.id == device.id
+        coordinator.connectedDevice?.id == device.id
     }
+
+    private var isReady: Bool {
+        isActiveDevice && coordinator.connectionState == .ready
+    }
+
+    // MARK: Connection
 
     private var connectionSection: some View {
         Section("Connection") {
             HStack {
                 Text("State")
                 Spacer()
-                Text(model.isReconnecting ? "Reconnecting" : model.connectionState.label)
-                    .foregroundColor(model.isReconnecting ? .orange : connectionColor)
+                Text(coordinator.isReconnecting ? "Reconnecting" : coordinator.connectionState.label)
+                    .foregroundColor(coordinator.isReconnecting ? .orange : connectionColor)
             }
 
-            if model.isReconnecting {
+            if coordinator.isReconnecting {
                 reconnectRow
             }
 
             HStack {
-                Text("Status Subscription")
+                Text("Encrypted session")
                 Spacer()
                 Label(
-                    model.isSubscribed ? "Active" : "Inactive",
-                    systemImage: model.isSubscribed ? "bell.fill" : "bell.slash"
+                    isReady ? "Ready" : "Inactive",
+                    systemImage: isReady ? "lock.fill" : "lock.slash"
                 )
-                .foregroundColor(model.isSubscribed ? .green : .secondary)
+                .foregroundColor(isReady ? .green : .secondary)
             }
 
             HStack {
@@ -262,25 +332,29 @@ struct DeviceDetailView: View {
                     .foregroundColor(.secondary)
             }
 
-            if model.connectionState.isBusy {
+            if coordinator.connectionState.isBusy && isActiveDevice {
                 Button("Cancel", role: .destructive) {
-                    model.cancelConnect()
+                    coordinator.cancelConnect()
                 }
-            } else if isActiveDevice && model.connectionState == .ready {
+            } else if isReady {
                 Button("Disconnect", role: .destructive) {
-                    model.disconnect()
+                    coordinator.disconnect()
                 }
-            } else if model.isReconnecting {
+            } else if coordinator.isReconnecting {
                 Button("Stop Reconnecting", role: .destructive) {
-                    model.cancelReconnection()
+                    coordinator.cancelReconnection()
                 }
+            } else if coordinator.connectedDevice != nil {
+                Text("Disconnect the current device before connecting to this one.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             } else {
                 Button("Connect") {
-                    model.connect(device)
+                    coordinator.connect(device)
                 }
             }
 
-            if let error = model.lastError {
+            if let error = coordinator.lastError, isActiveDevice {
                 Text(error)
                     .font(.caption)
                     .foregroundColor(.red)
@@ -295,12 +369,12 @@ struct DeviceDetailView: View {
                     .font(.caption)
                     .foregroundColor(.orange)
                 Spacer()
-                Text("Attempt \(model.reconnectAttempt)/\(model.reconnectDelays.count)")
+                Text("Attempt \(coordinator.reconnectAttempt)/\(coordinator.reconnectDelays.count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundColor(.secondary)
             }
 
-            if let nextAttemptAt = model.reconnectNextAttemptAt {
+            if let nextAttemptAt = coordinator.reconnectNextAttemptAt {
                 TimelineView(.periodic(from: .now, by: 0.1)) { context in
                     Text(String(format: "Next attempt in %.1f s", max(0, nextAttemptAt.timeIntervalSince(context.date))))
                         .font(.caption2.monospacedDigit())
@@ -315,46 +389,44 @@ struct DeviceDetailView: View {
         .padding(.vertical, 1)
     }
 
-    // MARK: - Quick commands
+    // MARK: Quick commands
 
     private var quickCommandSection: some View {
         Section {
             HStack(spacing: 10) {
-                Button("START") {
-                    model.sendText("START")
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button("PING") {
-                    model.sendText("PING")
-                }
-                .buttonStyle(.bordered)
-
+                Button("START") { model.sendText("START") }
+                    .buttonStyle(.borderedProminent)
+                Button("STOP") { model.sendText("STOP") }
+                    .buttonStyle(.bordered)
+                Button("PING") { model.sendText("PING") }
+                    .buttonStyle(.bordered)
                 Spacer()
             }
-            .disabled(!isActiveDevice || model.connectionState != .ready || model.transferActive)
+            .disabled(!isReady || model.transferActive)
         } header: {
             Text("Quick Commands")
         } footer: {
             Text(
                 model.useEncryption
-                    ? "发送字面量 START / PING，经加密会话发出；外设回 START_ACK / PONG。"
+                    ? "发送 START / STOP / PING，经加密会话发出；Mock 与参考外设返回 *_ACK / PONG。"
                     : "Raw 模式：外设回的是纯文本状态串 RX #n。"
             )
         }
     }
 
+    // MARK: Send
+
     private var sendSection: some View {
         Section("Send Packet") {
-            Picker("Algorithm", selection: $model.algorithm) {
+            Picker("Algorithm", selection: $coordinator.algorithm) {
                 ForEach(CryptoAlgorithm.allCases, id: \.self) { algorithm in
                     Text(algorithm.shortName).tag(algorithm)
                 }
             }
             .pickerStyle(.segmented)
             .disabled(!model.useEncryption)
-            .onChange(of: model.algorithm) { _, _ in
-                model.applyAlgorithm()
+            .onChange(of: coordinator.algorithm) { _, _ in
+                coordinator.applyAlgorithm()
             }
 
             Picker("Transport", selection: $model.useEncryption) {
@@ -422,10 +494,16 @@ struct DeviceDetailView: View {
                         .textSelection(.enabled)
                 }
             }
+
+            if let error = model.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
         }
     }
 
-    // MARK: - Chunk test
+    // MARK: Chunk test
 
     private var chunkTestSection: some View {
         Section {
@@ -452,7 +530,7 @@ struct DeviceDetailView: View {
                 Label("Send \(chunkTestBytes) B (auto-chunked)", systemImage: "square.stack.3d.up.fill")
                     .frame(maxWidth: .infinity)
             }
-            .disabled(!isActiveDevice || model.connectionState != .ready || model.transferActive)
+            .disabled(!isReady || model.transferActive)
         } header: {
             Text("Chunk Test")
         } footer: {
@@ -464,7 +542,7 @@ struct DeviceDetailView: View {
         }
     }
 
-    // MARK: - Paced transfer
+    // MARK: Paced transfer
 
     private var transferSection: some View {
         Section {
@@ -508,7 +586,7 @@ struct DeviceDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!isActiveDevice || model.connectionState != .ready)
+                .disabled(!isReady)
 
                 if !model.transferPackets.isEmpty {
                     Button("Reset Transfer") {
@@ -613,6 +691,8 @@ struct DeviceDetailView: View {
         }
     }
 
+    // MARK: Log
+
     private var logSection: some View {
         Section {
             if model.logEntries.isEmpty {
@@ -620,8 +700,8 @@ struct DeviceDetailView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
-                ForEach(Array(model.logEntries.reversed())) { entry in
-                    logRow(entry)
+                ForEach(Array(model.logEntries.reversed().prefix(60))) { entry in
+                    LogEntryRow(entry: entry)
                 }
             }
         } header: {
@@ -642,46 +722,10 @@ struct DeviceDetailView: View {
         }
     }
 
-    private func logRow(_ entry: CommunicationLog) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: iconName(for: entry))
-                .foregroundColor(color(for: entry))
-                .font(.caption)
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(entry.message)
-                        .font(.caption.bold())
-                    Spacer()
-                    Text(entry.timestamp, style: .time)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                if let payload = entry.payload, !payload.isEmpty {
-                    Text(Self.payloadDescription(payload))
-                        .font(.caption2.monospaced())
-                        .foregroundColor(.secondary)
-                        .textSelection(.enabled)
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private static func payloadDescription(_ data: Data) -> String {
-        var lines = ["\(data.count) B · \(DemoModel.hexString(data))"]
-        if let text = String(data: data, encoding: .utf8),
-           !text.isEmpty,
-           text.utf8.allSatisfy({ $0 >= 0x20 && $0 != 0x7F }) {
-            lines.append(text)
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    // MARK: - Helpers
+    // MARK: Helpers
 
     private var connectionColor: Color {
-        switch model.connectionState {
+        switch coordinator.connectionState {
         case .ready: return .green
         case .connecting, .discovering: return .orange
         case .failed: return .red
@@ -697,8 +741,7 @@ struct DeviceDetailView: View {
     }
 
     private var canSend: Bool {
-        isActiveDevice
-            && model.connectionState == .ready
+        isReady
             && !model.transferActive
             && !(outgoingData?.isEmpty ?? true)
     }
@@ -716,35 +759,21 @@ struct DeviceDetailView: View {
         }
     }
 
-    private func iconName(for entry: CommunicationLog) -> String {
-        switch entry.category {
-        case .transmit: return "arrow.up.circle.fill"
-        case .receive: return "arrow.down.circle.fill"
-        case .ble: return "antenna.radiowaves.left.and.right"
-        case .gatt: return "square.stack.3d.up"
-        case .transport: return "arrow.left.arrow.right"
-        case .crypto: return "lock.fill"
-        case .session: return "point.3.connected.trianglepath.dotted"
-        case .demo: return "play.circle"
-        @unknown default: return "circle"
-        }
-    }
-
-    private func color(for entry: CommunicationLog) -> Color {
-        if entry.category == .transmit { return .blue }
-        if entry.category == .receive { return .green }
-        switch entry.level {
-        case .debug, .info: return .secondary
-        case .warning: return .orange
-        case .error: return .red
-        }
-    }
-
     private func sendPacket() {
         guard let data = outgoingData, !data.isEmpty else {
             model.lastError = "Enter a valid non-empty payload."
             return
         }
         model.send(data, withResponse: useResponse)
+    }
+
+    private static func payloadDescription(_ data: Data) -> String {
+        var lines = ["\(data.count) B · \(DemoModel.hexString(data))"]
+        if let text = String(data: data, encoding: .utf8),
+           !text.isEmpty,
+           text.utf8.allSatisfy({ $0 >= 0x20 && $0 != 0x7F }) {
+            lines.append(text)
+        }
+        return lines.joined(separator: "\n")
     }
 }

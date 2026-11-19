@@ -10,6 +10,10 @@
 		AABBCCDDEEFF000011223352 /* ModuBLEDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122334E /* ModuBLEDemoApp.swift */; };
 		AABBCCDDEEFF000011223353 /* DemoModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122334F /* DemoModel.swift */; };
 		AABBCCDDEEFF000011223354 /* DemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF000011223350 /* DemoView.swift */; };
+		AABBCCDDEEFF00001122335F /* DeviceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF000011223355 /* DeviceCoordinator.swift */; };
+		AABBCCDDEEFF000011223363 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122335C /* DashboardView.swift */; };
+		AABBCCDDEEFF000011223364 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122335D /* LogsView.swift */; };
+		AABBCCDDEEFF000011223365 /* SimulatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122335E /* SimulatorView.swift */; };
 		AABBCCDDEEFF000011223362 /* ModuBLE in Frameworks */ = {isa = PBXBuildFile; productRef = AABBCCDDEEFF000011223361 /* ModuBLE */; };
 /* End PBXBuildFile section */
 
@@ -19,6 +23,10 @@
 		AABBCCDDEEFF00001122334E /* ModuBLEDemoApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ModuBLEDemoApp.swift; sourceTree = "<group>"; };
 		AABBCCDDEEFF00001122334F /* DemoModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoModel.swift; sourceTree = "<group>"; };
 		AABBCCDDEEFF000011223350 /* DemoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoView.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF000011223355 /* DeviceCoordinator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DeviceCoordinator.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122335C /* DashboardView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122335D /* LogsView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122335E /* SimulatorView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SimulatorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,6 +56,10 @@
 				AABBCCDDEEFF00001122334E /* ModuBLEDemoApp.swift */,
 				AABBCCDDEEFF00001122334F /* DemoModel.swift */,
 				AABBCCDDEEFF000011223350 /* DemoView.swift */,
+				AABBCCDDEEFF000011223355 /* DeviceCoordinator.swift */,
+				AABBCCDDEEFF00001122335C /* DashboardView.swift */,
+				AABBCCDDEEFF00001122335D /* LogsView.swift */,
+				AABBCCDDEEFF00001122335E /* SimulatorView.swift */,
 			);
 			path = ModuBLEDemo;
 			sourceTree = "<group>";
@@ -122,6 +134,10 @@
 				AABBCCDDEEFF000011223352 /* ModuBLEDemoApp.swift in Sources */,
 				AABBCCDDEEFF000011223353 /* DemoModel.swift in Sources */,
 				AABBCCDDEEFF000011223354 /* DemoView.swift in Sources */,
+				AABBCCDDEEFF00001122335F /* DeviceCoordinator.swift in Sources */,
+				AABBCCDDEEFF000011223363 /* DashboardView.swift in Sources */,
+				AABBCCDDEEFF000011223364 /* LogsView.swift in Sources */,
+				AABBCCDDEEFF000011223365 /* SimulatorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
