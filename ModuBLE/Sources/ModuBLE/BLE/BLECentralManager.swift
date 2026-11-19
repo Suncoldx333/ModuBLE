@@ -123,9 +123,22 @@ public final class BLECentralManager: NSObject, @unchecked Sendable {
                     continuation.resume(throwing: BLEError.connectionFailed("Another connection is already active"))
                     return
                 }
-                guard let peripheral = peripherals[device.id] else {
+                guard let peripheral = peripherals[device.id]
+                    ?? central?.retrievePeripherals(withIdentifiers: [device.id]).first else {
                     continuation.resume(throwing: BLEError.peripheralNotFound)
                     return
+                }
+                if peripherals[device.id] == nil {
+                    // The scan cache only holds what this process has seen.
+                    // After an app restart, or when the system kept the link
+                    // alive, the identifier is still usable even though the
+                    // cache is empty.
+                    peripherals[device.id] = peripheral
+                    logStore?.log(
+                        .debug,
+                        .ble,
+                        "Recovered \(device.displayName) from the system peripheral cache"
+                    )
                 }
                 guard device.isConnectable != false else {
                     continuation.resume(throwing: BLEError.peripheralNotConnectable)

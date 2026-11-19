@@ -24,7 +24,7 @@ BLEPro/
 │   │   ├── Session/                加密请求/响应会话
 │   │   ├── Logging/                结构化事件日志
 │   │   └── Demo/                   公开的测试密钥（明确标注）
-│   ├── Tests/ModuBLETests/         98 个 XCTest
+│   ├── Tests/ModuBLETests/         103 个 XCTest
 │   └── Documentation/
 │       ├── Peripheral-GATT.md      外设契约与协议定义
 │       └── Device-Verification.md  真机验收清单与已验证记录
@@ -57,7 +57,7 @@ BLEPro/
 ```bash
 cd ModuBLE
 swift build
-swift test          # 98 tests
+swift test          # 103 tests
 ```
 
 ### 已验证环境
@@ -69,7 +69,7 @@ swift test          # 98 tests
 | Swift | 6.4（swiftlang-6.4.0.34.1） |
 | Xcode | 27.0（27A266a） |
 | macOS | 27.0 |
-| `swift test` | 98 passed, 0 failed |
+| `swift test` | 103 passed, 0 failed |
 | `BLEPeripheralApp` | Debug 构建通过（无签名） |
 | `ModuBLEDemo` | iOS Simulator 构建通过（无签名） |
 
@@ -209,6 +209,8 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `BLECentralManager` | 蓝牙状态广播、扫描、连接、取消连接 |
 | `BLEConnection` | 特征发现、TX 订阅、MTU 切片写入、`inbound` 字节流、`observeState()` |
 | `BLELink` | 字节链路抽象，`Session` 只依赖它（便于注入假实现） |
+| `DeviceLink` | `BLELink` + 设备身份、断连观察、MTU；`BLEConnection` 已实现 |
+| `DeviceTransport` / `CoreBluetoothTransport` | 扫描、连接的统一抽象与 CoreBluetooth 适配（Mock 为后续阶段） |
 | `GATTProfile` | Service / RX / TX UUID 与写模式配置 |
 | `PacketCodec` / `PacketDecoder` | 单帧编解码 / 流式重组（含 magic 重同步） |
 | `CryptoProvider` | 加密抽象；`AESGCMProvider`、`AESCBCProvider` |
@@ -244,8 +246,9 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `BLE` | ✅ 真机验证 |
 | `Session` | ✅ 真机验证 |
 | `Session.events` | ✅ 单测覆盖（外设尚未主动推送） |
+| `Transport` | ✅ `DeviceTransport` + CoreBluetooth 适配（Mock 待实现） |
 
-98 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
+103 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
 分片重组、中途切换算法）。
 
 **真机已验证**（iPhone ↔ macOS 外设，2026-11-14）：
@@ -271,6 +274,7 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `EncryptedSessionConcurrencyTests` | 128 并发 × 20 轮的 continuation 泄漏回归、预留释放、close 竞争、超时后复用 |
 | `EncryptedSessionEventTests` | 事件解密分发、事件与响应互不干扰、坏事件丢弃、流终止 |
 | `EncryptedSessionLimitsTests` | GCM/CBC 明文上限、边界请求、超限拒绝、切换算法后的上限 |
+| `DeviceTransportTests` | 传输类型、蓝牙状态不提前激活、`DeviceLink` 默认写模式、MTU 透出 |
 | `BLETypesTests` / `MTUChunkerTests` | 状态与错误映射、切片边界、Data 切片索引 |
 | `BLELinkTests` | 假链路上的帧往返、噪声容忍 |
 | `CommunicationLogStoreTests` | 顺序、容量上限、回调保序 |
