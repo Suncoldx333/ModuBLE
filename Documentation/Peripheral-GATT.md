@@ -1,6 +1,6 @@
 # 参考外设 GATT 契约
 
-> 事实来源：`bleProject/BLEPeripheralApp/` 当前代码（2026-11-19 核对）
+> 事实来源：`Demo/BLEPeripheralApp/` 当前代码（2026-11-19 核对）
 > 适用范围：iPhone 端 SDK（`ModuBLE`）与 Mac 参考外设之间的链路与协议
 > 状态：**与代码一致**。任何一方改动 UUID、属性或载荷格式，必须先改本文件。
 

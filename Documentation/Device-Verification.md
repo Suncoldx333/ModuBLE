@@ -9,8 +9,8 @@
 
 | 角色 | 操作 |
 |---|---|
-| Mac | 打开 `bleProject/BLEPeripheralApp.xcodeproj`，运行 `BLEPeripheralApp`，点 **Start Advertising** |
-| iPhone | 打开 `bleProject/ModuBLEDemo.xcodeproj`，选择真机，运行 `ModuBLEDemo` |
+| Mac | 打开 `Demo/BLEPeripheralApp.xcodeproj`，运行 `BLEPeripheralApp`，点 **Start Advertising** |
+| iPhone | 打开 `Demo/ModuBLEDemo.xcodeproj`，选择真机，运行 `ModuBLEDemo` |
 
 确认 Mac 上显示 **Advertising: Yes**，并记下 Rx/Tx 的订阅者数量（初始为 0）。
 

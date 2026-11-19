@@ -35,7 +35,7 @@ public struct GATTProfile: Equatable, Sendable {
 }
 
 extension GATTProfile {
-    /// Layout exposed by the reference Mac peripheral app in `bleProject/`.
+    /// Layout exposed by the reference Mac peripheral app in `Demo/`.
     ///
     /// RX accepts both write types; TX is notify-only. This is a real, verified
     /// definition — see `Documentation/Peripheral-GATT.md`.

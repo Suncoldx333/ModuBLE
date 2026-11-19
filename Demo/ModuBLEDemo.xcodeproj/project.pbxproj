@@ -115,7 +115,7 @@
 			);
 			mainGroup = AABBCCDDEEFF000011223345;
 			packageReferences = (
-				AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference "../ModuBLE" */,
+				AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference ".." */,
 			);
 			productRefGroup = AABBCCDDEEFF000011223347 /* Products */;
 			projectDirPath = "";
@@ -277,16 +277,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference "../ModuBLE" */ = {
+		AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference ".." */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../ModuBLE;
+			relativePath = ..;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		AABBCCDDEEFF000011223361 /* ModuBLE */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference "../ModuBLE" */;
+			package = AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference ".." */;
 			productName = ModuBLE;
 		};
 /* End XCSwiftPackageProductDependency section */

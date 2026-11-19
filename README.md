@@ -14,21 +14,23 @@
 ## 仓库结构
 
 ```text
-BLEPro/
-├── ModuBLE/                        ← 本 SDK（Swift Package）
-│   ├── Package.swift
-│   ├── Sources/ModuBLE/
-│   │   ├── BLE/                    CoreBluetooth 封装
-│   │   ├── Protocol/               帧格式、编解码、流式重组
-│   │   ├── Crypto/                 加密抽象与两种实现
-│   │   ├── Session/                加密请求/响应会话
-│   │   ├── Logging/                结构化事件日志
-│   │   └── Demo/                   公开的测试密钥（明确标注）
-│   ├── Tests/ModuBLETests/         156 个 XCTest
-│   └── Documentation/
-│       ├── Peripheral-GATT.md      外设契约与协议定义
-│       └── Device-Verification.md  真机验收清单与已验证记录
-├── bleProject/
+ModuBLE/
+├── Package.swift                   ← Swift Package 根，可直接作为依赖
+├── Sources/ModuBLE/
+│   ├── BLE/                        CoreBluetooth 封装
+│   ├── Transport/                  DeviceTransport / CoreBluetooth / Mock
+│   ├── Device/                     DeviceSession / DeviceManager
+│   ├── Protocol/                   帧格式、编解码、流式重组
+│   ├── Crypto/                     加密抽象与两种实现
+│   ├── Session/                    加密会话、事件流
+│   ├── Logging/                    结构化事件日志
+│   └── Demo/                       遥测格式、命令表、公开测试密钥
+├── Tests/ModuBLETests/             156 个 XCTest
+├── Documentation/
+│   ├── Peripheral-GATT.md          外设契约与协议定义
+│   ├── Device-Verification.md      真机验收清单与已验证记录
+│   └── Screenshots/
+├── Demo/
 │   ├── ModuBLEDemo.xcodeproj       iPhone Demo（只调用 SDK 公共接口）
 │   └── BLEPeripheralApp.xcodeproj  macOS 参考外设（复用 SDK 做加解密）
 ├── .github/workflows/ci.yml        swift test + 两个 App 的无签名构建
@@ -36,8 +38,8 @@ BLEPro/
 └── .gitignore
 ```
 
-> 两个 App 通过 `XCLocalSwiftPackageReference ../ModuBLE` 引用本地包，因此必须保持
-> 仓库内的相对目录结构；只克隆 `ModuBLE` 子目录会无法构建 Demo。
+> 两个 App 通过 `XCLocalSwiftPackageReference ..` 引用仓库根的包。SwiftPM 依赖地址
+> `https://github.com/Suncoldx333/ModuBLE.git` 始终指向 `Package.swift` 所在位置。
 
 ## 模块职责
 
@@ -55,7 +57,6 @@ BLEPro/
 ## 快速开始
 
 ```bash
-cd ModuBLE
 swift build
 swift test          # 156 tests
 ```
@@ -79,10 +80,10 @@ CI（`.github/workflows/ci.yml`）在 `macos-15` 上重复上述三项检查。
 
 ```bash
 # 1. Mac 端外设
-open bleProject/BLEPeripheralApp.xcodeproj     # 运行后点 Start Advertising
+open Demo/BLEPeripheralApp.xcodeproj     # 运行后点 Start Advertising
 
 # 2. iPhone 端 Demo
-open bleProject/ModuBLEDemo.xcodeproj          # 选择真机运行
+open Demo/ModuBLEDemo.xcodeproj          # 选择真机运行
 ```
 
 Demo 里：扫描 → 连接 → Quick Commands 点 `START`，看到 `LAST DECRYPTED RESPONSE:
