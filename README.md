@@ -100,6 +100,8 @@ Using the package as a dependency (there are no release tags yet):
 
 ![Devices tab](Documentation/Screenshots/devices.png)
 
+A shot-by-shot recording plan is in [Documentation/Demo-Script.md](Documentation/Demo-Script.md).
+
 ## Architecture
 
 ```text
@@ -231,6 +233,11 @@ swift test        # 156 tests
 | Device layer | Session lifecycle, link-loss release, transport switching, crypto failure cleanup |
 
 The concurrency tests exist because the original session could orphan a continuation when two callers reserved a sequence at the same time; the regression test fails on the old implementation and passes now.
+
+Wire format details and the peripheral contract are in
+[Documentation/Peripheral-GATT.md](Documentation/Peripheral-GATT.md); the manual
+real-device checklist and recorded results are in
+[Documentation/Device-Verification.md](Documentation/Device-Verification.md).
 
 ## Limitations
 
