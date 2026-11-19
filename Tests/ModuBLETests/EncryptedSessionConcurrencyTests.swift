@@ -187,25 +187,74 @@ final class EncryptedSessionConcurrencyTests: XCTestCase {
     ///
     /// A's response is admitted and starts decrypting; A times out while the
     /// decryption is still running; B then installs itself as the pending
-    /// request; when A's decryption finally completes it must not resolve B.
+    /// request; when A's decryption finally completes it must neither resolve
+    /// nor fail B. The timeout must stay effective for A itself.
     func testDecryptionFinishingAfterTimeoutDoesNotCompleteNextRequest() async throws {
         let link = FakeBLELink()
         let base = try AESGCMProvider(key: gcmKey)
-        let session = EncryptedSession(
-            link: link,
-            crypto: SlowDecryptProvider(base: base, seconds: 0.4),
-            timeout: .milliseconds(200)
-        )
+        let gate = GatedDecryptProvider(base: base, marker: Data("A".utf8))
+        let session = EncryptedSession(link: link, crypto: gate, timeout: .milliseconds(300))
         EchoResponder(link: link, crypto: base).install()
 
         let first = Task { try await session.request(Data("A".utf8)) }
-        // A has timed out; its response is still inside `decrypt`.
-        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(gate.waitUntilDecrypting(timeout: 1))
+
+        // Let A's timeout fire while its response is still inside `decrypt`.
+        try await Task.sleep(for: .milliseconds(700))
 
         let second = Task { try await session.request(Data("B".utf8)) }
+        let sent = await Self.waitUntil(timeout: .seconds(1)) {
+            link.writtenPayloads.count == 2
+        }
+        XCTAssertTrue(sent, "the second request was never written")
+
+        gate.unblock()
+
+        do {
+            _ = try await first.value
+            XCTFail("expected the request to time out during decryption")
+        } catch let error as SessionError {
+            XCTAssertEqual(error, .timedOut)
+        }
+
         let reply = try await second.value
         XCTAssertEqual(reply, Data("B".utf8))
-        _ = try? await first.value
+    }
+
+    /// `close()` must release a caller that is stuck inside response
+    /// decryption. Removing the pending slot before decrypting would leave it
+    /// suspended until the provider finished.
+    func testCloseDuringResponseDecryptionReleasesRequest() async throws {
+        let link = FakeBLELink()
+        let base = try AESGCMProvider(key: gcmKey)
+        let gate = GatedDecryptProvider(base: base, marker: Data("A".utf8))
+        let session = EncryptedSession(link: link, crypto: gate, timeout: .seconds(5))
+        EchoResponder(link: link, crypto: base).install()
+
+        let outcome = OutcomeLog()
+        let request = Task {
+            do {
+                outcome.record(.success(try await session.request(Data("A".utf8))))
+            } catch {
+                outcome.record(.failure(error))
+            }
+        }
+
+        XCTAssertTrue(gate.waitUntilDecrypting(timeout: 1))
+        await session.close()
+
+        let settled = await Self.waitUntil(timeout: .seconds(1)) {
+            outcome.count == 1
+        }
+        XCTAssertTrue(settled, "close did not release a request stuck in decrypt")
+
+        gate.unblock()
+        _ = await request.value
+
+        guard case .failure(let error)? = outcome.results.first else {
+            return XCTFail("expected the request to be cancelled")
+        }
+        XCTAssertEqual(error as? SessionError, .closed)
     }
 
     // MARK: - Helpers
@@ -237,11 +286,22 @@ private struct ExpandingProvider: CryptoProvider {
     }
 }
 
-/// Wraps the real provider and blocks inside `decrypt`, so a test can make the
-/// response handler straddle a request timeout deterministically.
-private struct SlowDecryptProvider: CryptoProvider {
+/// Wraps the real provider and blocks inside `decrypt` when the plaintext
+/// matches `marker`, so a test can hold one response inside decryption while a
+/// timeout or close runs. Only the marked payload blocks, which keeps a second
+/// request from inheriting the delay.
+private final class GatedDecryptProvider: CryptoProvider, @unchecked Sendable {
     let base: AESGCMProvider
-    let seconds: TimeInterval
+    let marker: Data
+
+    private let condition = NSCondition()
+    private var isDecrypting = false
+    private var released = false
+
+    init(base: AESGCMProvider, marker: Data) {
+        self.base = base
+        self.marker = marker
+    }
 
     var algorithm: CryptoAlgorithm { base.algorithm }
 
@@ -250,7 +310,34 @@ private struct SlowDecryptProvider: CryptoProvider {
     }
 
     func decrypt(_ ciphertext: Data) throws -> Data {
-        Thread.sleep(forTimeInterval: seconds)
-        return try base.decrypt(ciphertext)
+        let plaintext = try base.decrypt(ciphertext)
+        guard plaintext == marker else { return plaintext }
+
+        condition.lock()
+        isDecrypting = true
+        condition.broadcast()
+        while !released {
+            condition.wait()
+        }
+        condition.unlock()
+        return plaintext
+    }
+
+    /// Blocks the calling test until `decrypt` reaches the marked payload.
+    func waitUntilDecrypting(timeout: TimeInterval) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        let deadline = Date().addingTimeInterval(timeout)
+        while !isDecrypting {
+            if !condition.wait(until: deadline) { return false }
+        }
+        return true
+    }
+
+    func unblock() {
+        condition.lock()
+        released = true
+        condition.broadcast()
+        condition.unlock()
     }
 }

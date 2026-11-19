@@ -7,7 +7,9 @@ import Foundation
 /// - encrypt the request, wrap it in a `Packet`, and write it through the link;
 /// - reassemble inbound bytes into packets, match the response by sequence,
 ///   verify and decrypt it; a late or duplicate response is logged and dropped
-///   instead of resolving the request that is currently in flight;
+///   instead of resolving the request that is currently in flight. The pending
+///   slot is committed only after decryption, so timeout and close stay
+///   effective while a response is being verified;
 /// - decrypt unsolicited `event` frames and publish them on `events`;
 /// - bound every request with a timeout so a silent peripheral cannot hang a
 ///   caller.
@@ -275,13 +277,12 @@ public final class EncryptedSession: @unchecked Sendable {
                 return
             }
 
-            // Check the id and remove the pending slot in one critical section.
-            // From here on timeout, close and write-failure can no longer
-            // resolve this caller, and no later request can inherit its answer.
-            guard let claimed = claim(snapshot.id) else { return }
-            claimed.timeoutTask.cancel()
-
+            // Keep the request pending while the payload is decrypted: timeout
+            // and close stay authoritative until the result is committed. The
+            // commit below is the single atomic point that decides whether this
+            // response still belongs to a waiting caller.
             let provider = cryptoLock.withLock { crypto }
+            let result: Result<Data, Error>
             do {
                 let plaintext = try provider.decrypt(packet.payload)
                 logStore?.log(
@@ -290,12 +291,14 @@ public final class EncryptedSession: @unchecked Sendable {
                     "Decrypted response #\(packet.sequence) · \(plaintext.count) B",
                     payload: plaintext
                 )
-                claimed.continuation.resume(returning: plaintext)
+                result = .success(plaintext)
             } catch let error as CryptoError {
-                claimed.continuation.resume(throwing: SessionError.crypto(error))
+                result = .failure(SessionError.crypto(error))
             } catch {
-                claimed.continuation.resume(throwing: SessionError.crypto(.malformedEnvelope))
+                result = .failure(SessionError.crypto(.malformedEnvelope))
             }
+
+            finish(result, onlyIf: snapshot.id)
 
         case .event:
             let provider = cryptoLock.withLock { crypto }
@@ -376,16 +379,12 @@ public final class EncryptedSession: @unchecked Sendable {
         }
     }
 
-    /// Removes `pending` only if it still belongs to `id`. This is the single
-    /// atomic point where a response takes ownership of a waiting caller.
-    private func claim(_ requestID: UInt64) -> Pending? {
-        lock.withLock {
-            guard let current = pending, current.id == requestID else { return nil }
-            pending = nil
-            return current
-        }
-    }
-
+    /// Removes `pending` only if it still belongs to `id`, then resumes it.
+    ///
+    /// This is the single atomic commit point: the response path, timeout,
+    /// close and write-failure all race through it, and whichever acquires the
+    /// lock first wins. A response that finishes decrypting after its request
+    /// already timed out or closed simply finds no matching slot and is dropped.
     private func finish(_ result: Result<Data, Error>, onlyIf requestID: UInt64? = nil) {
         let resolved: Pending? = lock.withLock {
             guard let current = pending else { return nil }
