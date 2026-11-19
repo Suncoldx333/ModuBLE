@@ -1,65 +1,49 @@
 # ModuBLE
 
-**A modular Swift BLE SDK with encrypted sessions, a device abstraction layer, and a hardware-free demo.**
-
-ModuBLE keeps CoreBluetooth behind a byte-oriented link, layers authenticated request/response and event streams on top, and ships an iOS demo that can run against either a virtual peripheral or a macOS CoreBluetooth peripheral.
+ModuBLE is a modular Swift BLE communication SDK designed to demonstrate a testable device communication stack, from CoreBluetooth transport to encrypted sessions and telemetry streaming. It includes a deterministic mock peripheral and a macOS BLE peripheral for software-level and real-link verification.
 
 > 中文文档：[README.zh-CN.md](README.zh-CN.md)
 
 ---
 
-## What this project demonstrates
+## Project Overview
+
+ModuBLE keeps CoreBluetooth behind a byte-oriented link, layers authenticated request/response and event streams on top, and ships an iOS demo that can run against either a virtual peripheral or a macOS CoreBluetooth peripheral.
+
+The package is structured so each layer can be tested without a radio: protocol and crypto are pure Swift, the session layer depends only on `BLELink` and `CryptoProvider`, and the mock transport exercises the same code path as a real device.
+
+## Key Features
 
 - **A testable BLE core.** Packet framing, reassembly, AES-GCM and AES-CBC+HMAC are pure Swift with no CoreBluetooth dependency, so the whole protocol is unit-tested.
 - **A device layer, not just a scanner.** `DeviceTransport` → `DeviceSession` → `DeviceManager` gives one API for discovery, connection lifecycle, encrypted requests and decoded telemetry.
 - **Two verification paths.** A deterministic mock runs the full software stack with no hardware; the macOS peripheral app exercises a real BLE link.
 - **Honest fault injection.** Latency, dropped frames, corrupted AEAD payloads, malformed headers and mid-stream disconnects — all seedable and reproducible.
 
-## Repository layout
+## Demo
 
-```text
-ModuBLE/
-├── Package.swift                   Swift package root (usable as a dependency)
-├── Sources/ModuBLE/
-│   ├── BLE/                        CoreBluetooth central + connection
-│   ├── Transport/                  DeviceTransport, CoreBluetooth + Mock transports
-│   ├── Device/                     DeviceSession, DeviceManager
-│   ├── Protocol/                   Frame codec, streaming decoder
-│   ├── Crypto/                     CryptoProvider, AES-GCM, AES-CBC + HMAC
-│   ├── Session/                    EncryptedSession, event stream
-│   ├── Logging/                    Structured, ordered log store
-│   └── Demo/                       Telemetry codec, command table, demo keys
-├── Tests/ModuBLETests/             156 XCTest cases
-├── Documentation/
-│   ├── Peripheral-GATT.md          GATT contract and wire protocol
-│   ├── Device-Verification.md      Real-device checklist and results
-│   └── Screenshots/
-├── Demo/
-│   ├── ModuBLEDemo.xcodeproj       iOS demo
-│   └── BLEPeripheralApp.xcodeproj  macOS reference peripheral
-└── .github/workflows/ci.yml        Tests + unsigned builds of both apps
-```
+Both transports feed the same SwiftUI app; switching the transport only changes the link underneath.
 
-## Requirements
+| Tab | Contents |
+|---|---|
+| **Devices** | Transport picker, scan, RSSI, Mock / CoreBluetooth source, connect |
+| **Dashboard** | Yaw / pitch / roll, battery, uptime, event count, sample rate |
+| **Logs** | Structured TX/RX log with copy and clear |
+| **Simulator** | Fault controls and live injection counters |
+| **Diagnostics** | Raw writes, chunk test, paced transfer, MTU details |
+
+![Devices tab](Documentation/Screenshots/devices.png)
+
+A shot-by-shot recording plan is in [Documentation/Demo-Script.md](Documentation/Demo-Script.md).
+
+## Quick Start
+
+### Prerequisites
 
 - Swift 6 / Xcode 16 or newer
 - SDK: iOS 16+ or macOS 13+
 - iOS demo: iOS 17+ (uses `ContentUnavailableView` and two-parameter `onChange`)
 
-### Verified environment
-
-Checked on 2026-11-19:
-
-| Item | Value |
-|---|---|
-| Swift | 6.4 |
-| Xcode | 27.0 |
-| macOS | 27.0 |
-| `swift test` | 156 passed, 0 failed |
-| macOS peripheral build | Succeeds (`CODE_SIGNING_ALLOWED=NO`) |
-| iOS demo build | Succeeds for iOS Simulator |
-
-## Quick start
+### Build and test
 
 ```bash
 git clone https://github.com/Suncoldx333/ModuBLE.git
@@ -82,25 +66,13 @@ swift test
 2. On the iPhone, switch the transport to **CoreBluetooth** and scan for `MacBLE`.
 3. Connect, then send `START` from the Dashboard or Quick Commands.
 
-Using the package as a dependency (there are no release tags yet):
+### Use as a dependency
+
+There are no release tags yet:
 
 ```swift
 .package(url: "https://github.com/Suncoldx333/ModuBLE.git", branch: "main")
 ```
-
-## iOS demo
-
-| Tab | Contents |
-|---|---|
-| **Devices** | Transport picker, scan, RSSI, Mock / CoreBluetooth source, connect |
-| **Dashboard** | Yaw / pitch / roll, battery, uptime, event count, sample rate |
-| **Logs** | Structured TX/RX log with copy and clear |
-| **Simulator** | Fault controls and live injection counters |
-| **Diagnostics** | Raw writes, chunk test, paced transfer, MTU details |
-
-![Devices tab](Documentation/Screenshots/devices.png)
-
-A shot-by-shot recording plan is in [Documentation/Demo-Script.md](Documentation/Demo-Script.md).
 
 ## Architecture
 
@@ -128,7 +100,50 @@ Dependencies point one way: the session layer knows `BLELink` and `CryptoProvide
 | `Crypto` | AES-128-GCM and AES-128-CBC + HMAC-SHA256 | No |
 | `Logging` | Ordered, bounded in-memory log | No |
 
-## Protocol
+### Repository layout
+
+```text
+ModuBLE/
+├── Package.swift                   Swift package root (usable as a dependency)
+├── Sources/ModuBLE/
+│   ├── BLE/                        CoreBluetooth central + connection
+│   ├── Transport/                  DeviceTransport, CoreBluetooth + Mock transports
+│   ├── Device/                     DeviceSession, DeviceManager
+│   ├── Protocol/                   Frame codec, streaming decoder
+│   ├── Crypto/                     CryptoProvider, AES-GCM, AES-CBC + HMAC
+│   ├── Session/                    EncryptedSession, event stream
+│   ├── Logging/                    Structured, ordered log store
+│   └── Demo/                       Telemetry codec, command table, demo keys
+├── Tests/ModuBLETests/             168 XCTest cases
+├── Documentation/
+│   ├── Peripheral-GATT.md          GATT contract and wire protocol
+│   ├── Device-Verification.md      Real-device checklist and results
+│   └── Screenshots/
+├── Demo/
+│   ├── ModuBLEDemo.xcodeproj       iOS demo
+│   └── BLEPeripheralApp.xcodeproj  macOS reference peripheral
+└── .github/workflows/ci.yml        Tests + unsigned builds of both apps
+```
+
+### API at a glance
+
+| Type | Purpose |
+|---|---|
+| `BLECentralManager` | Bluetooth state, scanning, connection, cancellation |
+| `BLEConnection` | GATT discovery, TX subscription, MTU chunked writes, state stream |
+| `BLELink` | Minimal byte link used by the session layer |
+| `DeviceLink` | `BLELink` + device identity, connection state, MTU |
+| `DeviceTransport` | Transport-agnostic scan/connect; CoreBluetooth and mock implementations |
+| `EncryptedSession` | Encrypted request/response, timeout, algorithm switch, event stream |
+| `SessionEvent` / `DeviceEvent` | Decrypted events; `DeviceEvent` carries parsed telemetry |
+| `DeviceSession` | One device conversation with automatic close on link loss |
+| `DeviceManager` | Actor facade: transport choice, one session, crypto injection |
+| `Telemetry` / `TelemetryCodec` | Demo business payload and its binary format |
+| `MockDeviceTransport` / `MockBLELink` / `MockPeripheral` | Deterministic virtual device |
+| `FaultInjector` | Latency, drops, corruption, malformed frames, disconnects |
+| `CommunicationLogStore` | Ordered, bounded structured log |
+
+## Protocol & Security
 
 ### Frame
 
@@ -150,6 +165,12 @@ AES-128-CBC   0x02 | IV (16)    | Ciphertext (n) | HMAC-SHA256 (32)
 CBC verifies the MAC *before* decrypting. The 32-byte master key is split into AES and HMAC keys with HKDF-SHA256.
 
 Because the 4096-byte limit applies to the envelope, the usable plaintext per request is **4067 B** with GCM and **4031 B** with CBC; `EncryptedSession` rejects larger payloads with `SessionError.payloadTooLarge(max:)`.
+
+### Security properties
+
+- GCM provides authenticated encryption; CBC verifies its HMAC before revealing plaintext.
+- The envelope version is authenticated by the AEAD tag / HMAC, so downgrade to another format fails authentication.
+- There is **no replay protection, mutual authentication, key agreement or key rotation**. The demo key is public. See [Limitations](#limitations) before using this outside a demo.
 
 ### Reference commands
 
@@ -174,25 +195,28 @@ Version (1) | Kind (1) | Yaw (2) | Pitch (2) | Roll (2)
 
 Angles are signed centidegrees (`12.34° → 1234`); flag bit 0 is charging. Centidegrees keep the value exact across platforms, avoid NaN, and stay readable in a hex log.
 
-## API overview
+## Testing & Verification
 
-| Type | Purpose |
+### Automated tests
+
+```bash
+swift test        # 168 tests
+```
+
+| Area | Coverage |
 |---|---|
-| `BLECentralManager` | Bluetooth state, scanning, connection, cancellation |
-| `BLEConnection` | GATT discovery, TX subscription, MTU chunked writes, state stream |
-| `BLELink` | Minimal byte link used by the session layer |
-| `DeviceLink` | `BLELink` + device identity, connection state, MTU |
-| `DeviceTransport` | Transport-agnostic scan/connect; CoreBluetooth and mock implementations |
-| `EncryptedSession` | Encrypted request/response, timeout, algorithm switch, event stream |
-| `SessionEvent` / `DeviceEvent` | Decrypted events; `DeviceEvent` carries parsed telemetry |
-| `DeviceSession` | One device conversation with automatic close on link loss |
-| `DeviceManager` | Actor facade: transport choice, one session, crypto injection |
-| `Telemetry` / `TelemetryCodec` | Demo business payload and its binary format |
-| `MockDeviceTransport` / `MockBLELink` / `MockPeripheral` | Deterministic virtual device |
-| `FaultInjector` | Latency, drops, corruption, malformed frames, disconnects |
-| `CommunicationLogStore` | Ordered, bounded structured log |
+| Protocol | Frame round trips, byte-by-byte reassembly, magic resync, truncation, oversize frames |
+| Crypto | NIST CBC vectors, GCM/CBC round trips, tampering, wrong key, cross-format rejection |
+| Session | Timeouts, sequence mismatch, concurrent requests, close semantics, algorithm switch |
+| Concurrency | 128-way bursts over 20 rounds: no leaked continuations, no lost requests |
+| Events | Decryption, dispatch, malformed-event isolation, stream termination |
+| Telemetry | Wire format, sign and range boundaries, forward-compatible decoding |
+| Mock | Scan/connect, chunked round trips, telemetry, drop/corrupt/disconnect faults |
+| Device layer | Session lifecycle, link-loss release, transport switching, crypto failure cleanup |
 
-## Mock and fault injection
+The concurrency tests exist because the original session could orphan a continuation when two callers reserved a sequence at the same time; the regression test fails on the old implementation and passes now.
+
+### Deterministic mock and fault injection
 
 The mock uses the real `PacketDecoder`, `PacketCodec` and `CryptoProvider`. It only replaces the radio, so a mock round trip exercises framing, MTU chunking, encryption and decryption exactly like a real link.
 
@@ -215,24 +239,35 @@ transport.applyFaultConfiguration(
 
 Faults are seeded (`SplitMix64`), so the same failure sequence can be replayed from a bug report. The mock does **not** model RSSI variation, connection parameters or ATT congestion; it validates software behaviour, not radio performance.
 
-## Testing
+### Verified environment
 
-```bash
-swift test        # 156 tests
-```
+Checked on 2026-11-19:
 
-| Area | Coverage |
+| Item | Value |
 |---|---|
-| Protocol | Frame round trips, byte-by-byte reassembly, magic resync, truncation, oversize frames |
-| Crypto | NIST CBC vectors, GCM/CBC round trips, tampering, wrong key, cross-format rejection |
-| Session | Timeouts, sequence mismatch, concurrent requests, close semantics, algorithm switch |
-| Concurrency | 128-way bursts over 20 rounds: no leaked continuations, no lost requests |
-| Events | Decryption, dispatch, malformed-event isolation, stream termination |
-| Telemetry | Wire format, sign and range boundaries, forward-compatible decoding |
-| Mock | Scan/connect, chunked round trips, telemetry, drop/corrupt/disconnect faults |
-| Device layer | Session lifecycle, link-loss release, transport switching, crypto failure cleanup |
+| Swift | 6.4 |
+| Xcode | 27.0 |
+| macOS | 27.0 |
+| `swift test` | 168 passed, 0 failed |
+| macOS peripheral build | Succeeds (`CODE_SIGNING_ALLOWED=NO`) |
+| iOS demo build | Succeeds for iOS Simulator |
 
-The concurrency tests exist because the original session could orphan a continuation when two callers reserved a sequence at the same time; the regression test fails on the old implementation and passes now.
+### Verification status
+
+| Item | Status |
+|---|---|
+| Unit tests | ✅ 168 passing |
+| Both apps build | ✅ Verified |
+| Real BLE scan / connect / subscribe | ✅ 2026-11-14, iPhone ↔ macOS |
+| With / without response writes | ✅ 2026-11-14 |
+| MTU chunking (1000 B → 512 + 488) | ✅ 2026-11-14 |
+| AES-128-GCM `START` → `START_ACK` | ✅ 2026-11-14 |
+| AES-128-CBC switch mid-connection | ✅ 2026-11-14 |
+| Encrypted 1000 B echo | ✅ 2026-11-14 |
+| Reconnect after link loss | ⬜ Code complete, hardware run pending |
+| Telemetry events over real BLE | ⬜ Mock only so far |
+
+Interoperability with commercial BLE hardware has **not** been validated.
 
 Wire format details and the peripheral contract are in
 [Documentation/Peripheral-GATT.md](Documentation/Peripheral-GATT.md); the manual
@@ -253,23 +288,6 @@ This is a portfolio-grade SDK and demo, not a production security product.
 8. **The macOS peripheral assumes one central.** Concurrent writes from multiple centrals can interleave.
 9. **The mock does not model radio behaviour.** Faults are deterministic injections.
 10. **Telemetry on the macOS path is not yet validated with a physical iPhone.** The mock path and the SDK are unit-tested; the macOS emitter builds and is wired to the same command table, but the real-link telemetry round trip should be re-run before claiming it.
-
-### Verification status
-
-| Item | Status |
-|---|---|
-| Unit tests | ✅ 156 passing |
-| Both apps build | ✅ Verified |
-| Real BLE scan / connect / subscribe | ✅ 2026-11-14, iPhone ↔ macOS |
-| With / without response writes | ✅ 2026-11-14 |
-| MTU chunking (1000 B → 512 + 488) | ✅ 2026-11-14 |
-| AES-128-GCM `START` → `START_ACK` | ✅ 2026-11-14 |
-| AES-128-CBC switch mid-connection | ✅ 2026-11-14 |
-| Encrypted 1000 B echo | ✅ 2026-11-14 |
-| Reconnect after link loss | ⬜ Code complete, hardware run pending |
-| Telemetry events over real BLE | ⬜ Mock only so far |
-
-Interoperability with commercial BLE hardware has **not** been validated.
 
 ## Roadmap
 
