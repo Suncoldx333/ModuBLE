@@ -90,6 +90,8 @@ iOS app (SwiftUI)
 
 Dependencies point one way: the session layer knows `BLELink` and `CryptoProvider`, never CoreBluetooth. That is what makes the mock path a real test of the software rather than a UI stub.
 
+For the design rationale, concurrency guarantees and trade-offs behind these boundaries, see [Architecture.md](Architecture.md).
+
 | Layer | Responsibility | Depends on CoreBluetooth |
 |---|---|---|
 | `BLE` | Scan, connect, GATT discovery, notifications, MTU-aware writes | Yes (only here) |
@@ -105,6 +107,7 @@ Dependencies point one way: the session layer knows `BLELink` and `CryptoProvide
 ```text
 ModuBLE/
 ├── Package.swift                   Swift package root (usable as a dependency)
+├── Architecture.md                 Design rationale, concurrency, trade-offs
 ├── Sources/ModuBLE/
 │   ├── BLE/                        CoreBluetooth central + connection
 │   ├── Transport/                  DeviceTransport, CoreBluetooth + Mock transports
