@@ -82,11 +82,16 @@ AES-128-CBC   0x02 | IV (16)           | Ciphertext (n) | HMAC-SHA256 (32)
 
 ### 3.3 命令（明文语义）
 
-| 请求明文 | 响应明文 |
-|---|---|
-| `START` | `START_ACK` |
-| `PING` | `PONG` |
-| 其他任意字节 | 原样回显 |
+| 请求明文 | 响应明文 | 副作用 |
+|---|---|---|
+| `START` | `START_ACK` | 启动遥测（仅 Mock 实现） |
+| `STOP` | `STOP_ACK` | 停止遥测（仅 Mock 实现） |
+| `SET_RATE:<hz>` | `RATE:<hz>` | 修改频率 0.2–10 Hz（仅 Mock 实现） |
+| `PING` | `PONG` | — |
+| 其他任意字节 | 原样回显 | — |
+
+命令表由 SDK 的 `DemoPeripheralBehavior` 统一提供，Mock 与 macOS 外设调用同一实现，
+避免两端语义漂移。macOS 外设目前只使用回复文本，副作用留待后续阶段接入。
 
 回显分支让任意长度的二进制负载（含多 chunk）都能端到端校验。
 
@@ -127,14 +132,14 @@ AES-128-CBC   0x02 | IV (16)           | Ciphertext (n) | HMAC-SHA256 (32)
 | 加密 + 分包回显 | ✅ 1000 B 双向重组后逐字节一致 |
 | 断连自动重连 | ⬜ 代码完成，未做真机验证 |
 
-2026-11-19 复核：`swift test` 103 passed；`BLEPeripheralApp` 与 `ModuBLEDemo`
+2026-11-19 复核：`swift test` 142 passed；`BLEPeripheralApp` 与 `ModuBLEDemo`
 均可无签名构建通过（macOS 27 / Xcode 27 / Swift 6.4）。
 
 ## 7. 当前未实现（不要声称）
 
 - 应用层 ACK bitmap、滑动窗口、选择性重传、重试计数。
 - CRC 校验（协议层刻意不做）。
-- 外设主动推送的 Telemetry / 姿态事件：`event` 帧类型已定义，但**外设当前不发送**；
-  SDK 侧的事件流尚未接入 Demo 界面（见 README「后续路线」）。
+- 外设主动推送的 Telemetry / 姿态事件：`event` 帧类型与 SDK 事件流已实现，
+  **Mock 外设会推送**，但 macOS 外设当前不发送，Demo 界面也尚未接入。
 - 多 Central 并发写入的隔离保证。
 - 与任何商业量产设备的互操作性认证。

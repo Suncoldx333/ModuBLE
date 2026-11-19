@@ -24,7 +24,7 @@ BLEPro/
 │   │   ├── Session/                加密请求/响应会话
 │   │   ├── Logging/                结构化事件日志
 │   │   └── Demo/                   公开的测试密钥（明确标注）
-│   ├── Tests/ModuBLETests/         103 个 XCTest
+│   ├── Tests/ModuBLETests/         142 个 XCTest
 │   └── Documentation/
 │       ├── Peripheral-GATT.md      外设契约与协议定义
 │       └── Device-Verification.md  真机验收清单与已验证记录
@@ -57,7 +57,7 @@ BLEPro/
 ```bash
 cd ModuBLE
 swift build
-swift test          # 103 tests
+swift test          # 142 tests
 ```
 
 ### 已验证环境
@@ -69,7 +69,7 @@ swift test          # 103 tests
 | Swift | 6.4（swiftlang-6.4.0.34.1） |
 | Xcode | 27.0（27A266a） |
 | macOS | 27.0 |
-| `swift test` | 103 passed, 0 failed |
+| `swift test` | 142 passed, 0 failed |
 | `BLEPeripheralApp` | Debug 构建通过（无签名） |
 | `ModuBLEDemo` | iOS Simulator 构建通过（无签名） |
 
@@ -145,6 +145,33 @@ for await event in session.events { // 单消费者
 同一时刻只允许一个在途请求，并发调用返回 `SessionError.busy`——序号预留与 pending 安装
 在同一次加锁中完成，不存在两个调用互相覆盖 continuation 的窗口。
 
+### Mock 模式（无需硬件）
+
+Mock 走的是同一套 `PacketCodec` / `CryptoProvider` / `PacketDecoder`，只把射频换成内存
+队列，所以自动化测试验证的就是真实软件链路。
+
+```swift
+let transport = MockDeviceTransport(logStore: store)
+let stream = try await transport.scan(profile: .referencePeripheral)
+let device = /* 第一个设备 */
+let link = try await transport.connect(device, profile: .referencePeripheral)
+
+let session = EncryptedSession(
+    link: link,
+    crypto: try AESGCMProvider(key: DemoTestKey.aes128GCM),
+    timeout: .seconds(2)
+)
+session.start()
+for await event in session.events {
+    let telemetry = try TelemetryCodec.decode(event.payload)
+}
+
+// 故障只作用于当前连接；重新连接后使用 MockConfiguration.faults
+transport.applyFaultConfiguration(
+    FaultConfiguration(dropRate: 0.3, latency: .milliseconds(120))
+)
+```
+
 ## 协议
 
 ### 帧格式
@@ -210,7 +237,10 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `BLEConnection` | 特征发现、TX 订阅、MTU 切片写入、`inbound` 字节流、`observeState()` |
 | `BLELink` | 字节链路抽象，`Session` 只依赖它（便于注入假实现） |
 | `DeviceLink` | `BLELink` + 设备身份、断连观察、MTU；`BLEConnection` 已实现 |
-| `DeviceTransport` / `CoreBluetoothTransport` | 扫描、连接的统一抽象与 CoreBluetooth 适配（Mock 为后续阶段） |
+| `DeviceTransport` / `CoreBluetoothTransport` | 扫描、连接的统一抽象与 CoreBluetooth 适配 |
+| `MockDeviceTransport` / `MockBLELink` / `MockPeripheral` | 无需硬件的完整软件链路（真实编解码 + 加解密） |
+| `Telemetry` / `TelemetryCodec` / `TelemetryGenerator` | Demo 业务载荷模型、14 字节二进制格式、确定性数据源 |
+| `FaultInjector` / `FaultConfiguration` | 延迟、丢帧、认证损坏、坏帧、主动断连（可播种复现） |
 | `GATTProfile` | Service / RX / TX UUID 与写模式配置 |
 | `PacketCodec` / `PacketDecoder` | 单帧编解码 / 流式重组（含 magic 重同步） |
 | `CryptoProvider` | 加密抽象；`AESGCMProvider`、`AESCBCProvider` |
@@ -246,9 +276,10 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `BLE` | ✅ 真机验证 |
 | `Session` | ✅ 真机验证 |
 | `Session.events` | ✅ 单测覆盖（外设尚未主动推送） |
-| `Transport` | ✅ `DeviceTransport` + CoreBluetooth 适配（Mock 待实现） |
+| `Transport` | ✅ `DeviceTransport` + CoreBluetooth 适配 + Mock 传输 |
+| `Telemetry` | ✅ 编解码与数据源（尚未接入 Demo UI） |
 
-103 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
+142 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
 分片重组、中途切换算法）。
 
 **真机已验证**（iPhone ↔ macOS 外设，2026-11-14）：
@@ -275,6 +306,10 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `EncryptedSessionEventTests` | 事件解密分发、事件与响应互不干扰、坏事件丢弃、流终止 |
 | `EncryptedSessionLimitsTests` | GCM/CBC 明文上限、边界请求、超限拒绝、切换算法后的上限 |
 | `DeviceTransportTests` | 传输类型、蓝牙状态不提前激活、`DeviceLink` 默认写模式、MTU 透出 |
+| `TelemetryTests` | 14 字节格式往返、符号与边界角度、电量/uptime 越界、截断、版本、前向兼容 |
+| `DemoPeripheralBehaviorTests` | 命令表、速率范围、二进制回显 |
+| `FaultInjectorTests` | 种子可复现、速率钳制、损坏帧认证失败、坏帧不被解析、计数器 |
+| `MockTransportTests` | 扫描/连接、加密往返、超 MTU 分片重组、遥测事件、丢包/损坏/断连、热更新故障 |
 | `BLETypesTests` / `MTUChunkerTests` | 状态与错误映射、切片边界、Data 切片索引 |
 | `BLELinkTests` | 假链路上的帧往返、噪声容忍 |
 | `CommunicationLogStoreTests` | 顺序、容量上限、回调保序 |
@@ -293,8 +328,10 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 8. **单帧上限 4096 B**：超出直接拒绝，避免损坏的长度字段导致无界分配。该上限是
    **信封**长度，因此明文上限为 GCM 4067 B / CBC 4031 B，`EncryptedSession` 会提前
    返回 `SessionError.payloadTooLarge(max:)`。
-9. **事件流尚未接入 Demo**：`EncryptedSession.events` 已可用，但外设不主动推送，
-   Dashboard / Telemetry 仍属后续阶段。
+9. **事件流尚未接入 Demo**：`EncryptedSession.events` 与 Mock 外设已可用，
+   Dashboard / 故障面板仍属后续阶段；macOS 外设只响应命令，不主动推送事件。
+10. **Mock 不模拟射频细节**：没有 RSSI 抖动、连接参数协商、ATT 拥塞与真实丢包
+    模式；故障是按配置注入的确定性事件，不能用来评估无线性能。
 
 ## 安全边界
 
@@ -309,7 +346,7 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 - 重放保护（单调序号 + 接收窗口）
 - ECDH + HKDF 动态协商会话密钥
 - 多连接与连接池
-- 事件流接入 Demo：Mock 外设 + Telemetry 仪表盘（`EncryptedSession.events` 已完成）
-- `MockTransport`：无需硬件的端到端回放
+- 事件流接入 Demo：Dashboard 仪表盘与故障注入面板（SDK 侧已完成）
+- macOS 外设推送 Telemetry（当前只响应命令，不主动发事件）
 - 应用层可靠传输（滑动窗口、ACK bitmap、选择性重传）
 - 后台恢复与状态保存

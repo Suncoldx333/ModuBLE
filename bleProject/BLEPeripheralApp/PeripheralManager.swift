@@ -414,17 +414,10 @@ final class PeripheralManager: NSObject, CBPeripheralManagerDelegate, Observable
     }
 
     /// `START` → `START_ACK`, `PING` → `PONG`, everything else is echoed.
-    /// The echo branch makes arbitrary binary payloads (including multi-chunk
-    /// ones) verifiable end to end.
+    /// The command table lives in the SDK so the mock peripheral and this app
+    /// cannot drift apart.
     private static func respond(to plaintext: Data) -> Data {
-        if let text = String(data: plaintext, encoding: .utf8) {
-            switch text {
-            case "START": return Data("START_ACK".utf8)
-            case "PING": return Data("PONG".utf8)
-            default: break
-            }
-        }
-        return plaintext
+        DemoPeripheralBehavior.handle(plaintext).reply
     }
 
     // MARK: - Keep-awake
