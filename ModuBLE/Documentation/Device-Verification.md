@@ -176,7 +176,7 @@ Mac 控制台会标出算法：
 
 | 项 | 结果 |
 |---|---|
-| `swift test` | ✅ 142 passed, 0 failed |
+| `swift test` | ✅ 156 passed, 0 failed |
 | `BLEPeripheralApp` Debug 构建 | ✅ 通过（`CODE_SIGNING_ALLOWED=NO`，macOS 27 / Xcode 27） |
 | `ModuBLEDemo` iOS Simulator 构建 | ✅ 通过（同上） |
 

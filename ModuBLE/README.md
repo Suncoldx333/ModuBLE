@@ -24,7 +24,7 @@ BLEPro/
 │   │   ├── Session/                加密请求/响应会话
 │   │   ├── Logging/                结构化事件日志
 │   │   └── Demo/                   公开的测试密钥（明确标注）
-│   ├── Tests/ModuBLETests/         142 个 XCTest
+│   ├── Tests/ModuBLETests/         156 个 XCTest
 │   └── Documentation/
 │       ├── Peripheral-GATT.md      外设契约与协议定义
 │       └── Device-Verification.md  真机验收清单与已验证记录
@@ -57,7 +57,7 @@ BLEPro/
 ```bash
 cd ModuBLE
 swift build
-swift test          # 142 tests
+swift test          # 156 tests
 ```
 
 ### 已验证环境
@@ -69,7 +69,7 @@ swift test          # 142 tests
 | Swift | 6.4（swiftlang-6.4.0.34.1） |
 | Xcode | 27.0（27A266a） |
 | macOS | 27.0 |
-| `swift test` | 142 passed, 0 failed |
+| `swift test` | 156 passed, 0 failed |
 | `BLEPeripheralApp` | Debug 构建通过（无签名） |
 | `ModuBLEDemo` | iOS Simulator 构建通过（无签名） |
 
@@ -172,6 +172,33 @@ transport.applyFaultConfiguration(
 )
 ```
 
+### 设备门面（DeviceManager）
+
+`DeviceManager` 是 Demo 唯一需要接触的入口：选传输、扫描、单连接、持有会话。
+
+```swift
+let manager = DeviceManager(
+    transport: MockDeviceTransport(logStore: store),   // 或 CoreBluetoothTransport(logStore: store)
+    logStore: store,
+    crypto: { try AESGCMProvider(key: DemoTestKey.aes128GCM) }
+)
+
+let session = try await manager.connect(device)
+for await event in session.events {
+    if let telemetry = event.telemetry { /* Dashboard */ }
+}
+await manager.disconnect()
+```
+
+切换传输会先关闭当前会话：
+
+```swift
+await manager.switchTransport(CoreBluetoothTransport(logStore: store))
+```
+
+`DeviceSession` 在链路断开时会自己收敛为 `.closed`，`DeviceManager` 随后释放会话，
+所以掉线后可以直接再次 `connect`，不需要手动清理。
+
 ## 协议
 
 ### 帧格式
@@ -241,6 +268,9 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `MockDeviceTransport` / `MockBLELink` / `MockPeripheral` | 无需硬件的完整软件链路（真实编解码 + 加解密） |
 | `Telemetry` / `TelemetryCodec` / `TelemetryGenerator` | Demo 业务载荷模型、14 字节二进制格式、确定性数据源 |
 | `FaultInjector` / `FaultConfiguration` | 延迟、丢帧、认证损坏、坏帧、主动断连（可播种复现） |
+| `DeviceSession` | 单设备会话：请求/响应、事件解析、断连自动收敛、MTU 透出 |
+| `DeviceEvent` / `DeviceSessionState` | 解析后的遥测事件（保留原始载荷）与会话生命周期 |
+| `DeviceManager` | `actor` 门面：选传输、扫描、单连接管理、加密工厂注入 |
 | `GATTProfile` | Service / RX / TX UUID 与写模式配置 |
 | `PacketCodec` / `PacketDecoder` | 单帧编解码 / 流式重组（含 magic 重同步） |
 | `CryptoProvider` | 加密抽象；`AESGCMProvider`、`AESCBCProvider` |
@@ -278,8 +308,9 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `Session.events` | ✅ 单测覆盖（外设尚未主动推送） |
 | `Transport` | ✅ `DeviceTransport` + CoreBluetooth 适配 + Mock 传输 |
 | `Telemetry` | ✅ 编解码与数据源（尚未接入 Demo UI） |
+| `DeviceSession` / `DeviceManager` | ✅ 单会话生命周期、事件解析、掉线自动释放 |
 
-142 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
+156 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
 分片重组、中途切换算法）。
 
 **真机已验证**（iPhone ↔ macOS 外设，2026-11-14）：
@@ -310,6 +341,8 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `DemoPeripheralBehaviorTests` | 命令表、速率范围、二进制回显 |
 | `FaultInjectorTests` | 种子可复现、速率钳制、损坏帧认证失败、坏帧不被解析、计数器 |
 | `MockTransportTests` | 扫描/连接、加密往返、超 MTU 分片重组、遥测事件、丢包/损坏/断连、热更新故障 |
+| `DeviceSessionTests` | 遥测解析、非遥测事件保留、断连收敛、close 幂等、算法切换、原始写 |
+| `DeviceManagerTests` | 扫描转发、单连接、断连清理、掉线自动释放、传输切换、加密失败回收链路 |
 | `BLETypesTests` / `MTUChunkerTests` | 状态与错误映射、切片边界、Data 切片索引 |
 | `BLELinkTests` | 假链路上的帧往返、噪声容忍 |
 | `CommunicationLogStoreTests` | 顺序、容量上限、回调保序 |
