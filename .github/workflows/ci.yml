@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Test SDK
+        run: swift test --package-path ModuBLE
+
+      - name: Build macOS reference peripheral
+        run: >
+          xcodebuild
+          -project bleProject/BLEPeripheralApp.xcodeproj
+          -scheme BLEPeripheralApp
+          -configuration Debug
+          -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+      - name: Build iOS demo
+        run: >
+          xcodebuild
+          -project bleProject/ModuBLEDemo.xcodeproj
+          -scheme ModuBLEDemo
+          -configuration Debug
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          build

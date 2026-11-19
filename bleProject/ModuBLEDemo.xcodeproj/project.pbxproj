@@ -1,0 +1,279 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AABBCCDDEEFF000011223352 /* ModuBLEDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122334E /* ModuBLEDemoApp.swift */; };
+		AABBCCDDEEFF000011223353 /* DemoModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122334F /* DemoModel.swift */; };
+		AABBCCDDEEFF000011223354 /* DemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF000011223350 /* DemoView.swift */; };
+		AABBCCDDEEFF000011223362 /* ModuBLE in Frameworks */ = {isa = PBXBuildFile; productRef = AABBCCDDEEFF000011223361 /* ModuBLE */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AABBCCDDEEFF000011223349 /* ModuBLEDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ModuBLEDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AABBCCDDEEFF00001122334C /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122334E /* ModuBLEDemoApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ModuBLEDemoApp.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122334F /* DemoModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoModel.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF000011223350 /* DemoView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DemoView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AABBCCDDEEFF00001122334B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AABBCCDDEEFF000011223362 /* ModuBLE in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AABBCCDDEEFF000011223345 = {
+			isa = PBXGroup;
+			children = (
+				AABBCCDDEEFF000011223346 /* ModuBLEDemo */,
+				AABBCCDDEEFF000011223347 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AABBCCDDEEFF000011223346 /* ModuBLEDemo */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCCDDEEFF00001122334C /* Info.plist */,
+				AABBCCDDEEFF00001122334E /* ModuBLEDemoApp.swift */,
+				AABBCCDDEEFF00001122334F /* DemoModel.swift */,
+				AABBCCDDEEFF000011223350 /* DemoView.swift */,
+			);
+			path = ModuBLEDemo;
+			sourceTree = "<group>";
+		};
+		AABBCCDDEEFF000011223347 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCCDDEEFF000011223349 /* ModuBLEDemo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AABBCCDDEEFF000011223348 /* ModuBLEDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AABBCCDDEEFF00001122335B /* Build configuration list for PBXNativeTarget "ModuBLEDemo" */;
+			buildPhases = (
+				AABBCCDDEEFF00001122334A /* Sources */,
+				AABBCCDDEEFF00001122334B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ModuBLEDemo;
+			packageProductDependencies = (
+				AABBCCDDEEFF000011223361 /* ModuBLE */,
+			);
+			productName = ModuBLEDemo;
+			productReference = AABBCCDDEEFF000011223349 /* ModuBLEDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AABBCCDDEEFF000011223344 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 1020;
+				LastUpgradeCheck = 2700;
+				ORGANIZATIONNAME = "";
+			};
+			buildConfigurationList = AABBCCDDEEFF000011223358 /* Build configuration list for PBXProject "ModuBLEDemo" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AABBCCDDEEFF000011223345;
+			packageReferences = (
+				AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference "../ModuBLE" */,
+			);
+			productRefGroup = AABBCCDDEEFF000011223347 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AABBCCDDEEFF000011223348 /* ModuBLEDemo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AABBCCDDEEFF00001122334A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AABBCCDDEEFF000011223352 /* ModuBLEDemoApp.swift in Sources */,
+				AABBCCDDEEFF000011223353 /* DemoModel.swift in Sources */,
+				AABBCCDDEEFF000011223354 /* DemoView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AABBCCDDEEFF000011223356 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 24Y8GAPRT7;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+			};
+			name = Debug;
+		};
+		AABBCCDDEEFF000011223357 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 24Y8GAPRT7;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		AABBCCDDEEFF000011223359 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PA95L4A36T;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ModuBLEDemo/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhaoyunwang2.BLEScanner3323;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AABBCCDDEEFF00001122335A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PA95L4A36T;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ModuBLEDemo/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhaoyunwang2.BLEScanner3323;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AABBCCDDEEFF000011223358 /* Build configuration list for PBXProject "ModuBLEDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AABBCCDDEEFF000011223356 /* Debug */,
+				AABBCCDDEEFF000011223357 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AABBCCDDEEFF00001122335B /* Build configuration list for PBXNativeTarget "ModuBLEDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AABBCCDDEEFF000011223359 /* Debug */,
+				AABBCCDDEEFF00001122335A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference "../ModuBLE" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ModuBLE;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AABBCCDDEEFF000011223361 /* ModuBLE */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AABBCCDDEEFF000011223360 /* XCLocalSwiftPackageReference "../ModuBLE" */;
+			productName = ModuBLE;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = AABBCCDDEEFF000011223344 /* Project object */;
+}

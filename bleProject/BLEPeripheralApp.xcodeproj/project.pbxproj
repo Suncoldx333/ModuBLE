@@ -1,0 +1,227 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	objectVersion = 56;
+	classes = {
+	};
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AABBCCDDEEFF000011223352 /* BLEPeripheralAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122334E /* BLEPeripheralAppApp.swift */; };
+		AABBCCDDEEFF000011223354 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF000011223350 /* ContentView.swift */; };
+		AABBCCDDEEFF000011223355 /* PeripheralManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF000011223351 /* PeripheralManager.swift */; };
+		AABBCCDDEEFF00001122335C /* ReceivedDataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDDEEFF00001122335D /* ReceivedDataView.swift */; };
+		AABBCCDDEEFF000011223363 /* ModuBLE in Frameworks */ = {isa = PBXBuildFile; productRef = AABBCCDDEEFF000011223362 /* ModuBLE */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AABBCCDDEEFF00001122334C /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122334D /* BLEPeripheralApp.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.plain-text; path = BLEPeripheralApp.entitlements; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122334E /* BLEPeripheralAppApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BLEPeripheralAppApp.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF000011223349 /* BLEPeripheralApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BLEPeripheralApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AABBCCDDEEFF000011223350 /* ContentView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF000011223351 /* PeripheralManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PeripheralManager.swift; sourceTree = "<group>"; };
+		AABBCCDDEEFF00001122335D /* ReceivedDataView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ReceivedDataView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AABBCCDDEEFF00001122334B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AABBCCDDEEFF000011223363 /* ModuBLE in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AABBCCDDEEFF000011223345 /* main */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCCDDEEFF000011223346 /* BLEPeripheralApp */,
+				AABBCCDDEEFF000011223347 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AABBCCDDEEFF000011223346 /* BLEPeripheralApp */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCCDDEEFF00001122334C /* Info.plist */,
+				AABBCCDDEEFF00001122334D /* BLEPeripheralApp.entitlements */,
+				AABBCCDDEEFF00001122334E /* BLEPeripheralAppApp.swift */,
+				AABBCCDDEEFF000011223350 /* ContentView.swift */,
+				AABBCCDDEEFF000011223351 /* PeripheralManager.swift */,
+				AABBCCDDEEFF00001122335D /* ReceivedDataView.swift */,
+			);
+			path = BLEPeripheralApp;
+			sourceTree = "<group>";
+		};
+		AABBCCDDEEFF000011223347 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCCDDEEFF000011223349 /* BLEPeripheralApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AABBCCDDEEFF000011223348 /* BLEPeripheralApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AABBCCDDEEFF00001122335B /* Build configuration list for PBXNativeTarget "BLEPeripheralApp" */;
+			buildPhases = (
+				AABBCCDDEEFF00001122334A /* Sources */,
+				AABBCCDDEEFF00001122334B /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BLEPeripheralApp;
+			packageProductDependencies = (
+				AABBCCDDEEFF000011223362 /* ModuBLE */,
+			);
+			productName = BLEPeripheralApp;
+			productReference = AABBCCDDEEFF000011223349 /* BLEPeripheralApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AABBCCDDEEFF000011223344 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1020;
+				LastUpgradeCheck = 1020;
+				ORGANIZATIONNAME = "";
+			};
+			buildConfigurationList = AABBCCDDEEFF000011223358 /* Build configuration list for PBXProject "BLEPeripheralApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AABBCCDDEEFF000011223345 /* main */;
+			packageReferences = (
+				AABBCCDDEEFF000011223361 /* XCLocalSwiftPackageReference "../ModuBLE" */,
+			);
+			productRefGroup = AABBCCDDEEFF000011223347 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AABBCCDDEEFF000011223348 /* BLEPeripheralApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AABBCCDDEEFF00001122334A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AABBCCDDEEFF000011223352 /* BLEPeripheralAppApp.swift in Sources */,
+				AABBCCDDEEFF000011223354 /* ContentView.swift in Sources */,
+				AABBCCDDEEFF000011223355 /* PeripheralManager.swift in Sources */,
+				AABBCCDDEEFF00001122335C /* ReceivedDataView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AABBCCDDEEFF000011223356 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		AABBCCDDEEFF000011223357 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		AABBCCDDEEFF000011223359 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = BLEPeripheralApp/BLEPeripheralApp.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BLEPeripheralApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executablePath/../Frameworks",
+					"@executablePath",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhaoyunwang.BLEPeripheralApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AABBCCDDEEFF00001122335A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = BLEPeripheralApp/BLEPeripheralApp.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BLEPeripheralApp/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executablePath/../Frameworks",
+					"@executablePath",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhaoyunwang.BLEPeripheralApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AABBCCDDEEFF000011223358 /* Build configuration list for PBXProject "BLEPeripheralApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AABBCCDDEEFF000011223356 /* Debug */,
+				AABBCCDDEEFF000011223357 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AABBCCDDEEFF00001122335B /* Build configuration list for PBXNativeTarget "BLEPeripheralApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AABBCCDDEEFF000011223359 /* Debug */,
+				AABBCCDDEEFF00001122335A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AABBCCDDEEFF000011223361 /* XCLocalSwiftPackageReference "../ModuBLE" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ModuBLE;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AABBCCDDEEFF000011223362 /* ModuBLE */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AABBCCDDEEFF000011223361 /* XCLocalSwiftPackageReference "../ModuBLE" */;
+			productName = ModuBLE;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = AABBCCDDEEFF000011223344 /* Project object */;
+}
