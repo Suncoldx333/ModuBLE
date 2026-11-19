@@ -304,6 +304,14 @@ final class EncryptedSessionConcurrencyTests: XCTestCase {
             return XCTFail("expected the request to time out")
         }
         XCTAssertEqual(error as? SessionError, .timedOut)
+
+        // A request the caller already knows timed out must not reach the
+        // device: START/STOP-style commands are not safe to send after the
+        // caller has been told they failed.
+        let wrote = await Self.waitUntil(timeout: .milliseconds(200)) {
+            !link.writtenPayloads.isEmpty
+        }
+        XCTAssertFalse(wrote, "a timed-out request must not start a BLE write")
     }
 
     // MARK: - Helpers

@@ -222,10 +222,21 @@ public final class EncryptedSession: @unchecked Sendable {
             }
             if !attached {
                 timeoutTask.cancel()
+                // The request was already resolved (timeout, close or a
+                // response). Starting the write now would produce a device
+                // side effect after the caller has been told it failed.
+                return
             }
 
             Task { [weak self] in
                 guard let self else { return }
+                // Attaching the timer and scheduling this task are not atomic
+                // with completion. Do not start a write for a request that has
+                // been resolved in the meantime.
+                let stillPending = self.lock.withLock {
+                    self.pending?.id == requestID
+                }
+                guard stillPending else { return }
                 do {
                     try await self.link.write(frame)
                 } catch let error as BLEError {
