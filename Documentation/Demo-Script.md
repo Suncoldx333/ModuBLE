@@ -23,7 +23,7 @@ device resolution, no voice-over required — burn in short captions.
 | 8 | 0:58–1:04 | Simulator | Raise **Corrupt payload**, send again | "Tampered ciphertext fails AEAD authentication" |
 | 9 | 1:04–1:12 | Devices | Tap **Drop link now**, watch reconnect countdown | "Unexpected disconnect → bounded backoff → fresh session" |
 | 10 | 1:12–1:25 | Mac + iPhone (optional) | Start advertising on the Mac, connect from the iPhone, send START | "Same SDK against a real CoreBluetooth peripheral" |
-| 11 | 1:25–1:30 | End card | — | "156 unit tests · Mock + real BLE · MIT licensed" |
+| 11 | 1:25–1:30 | End card | — | "168 unit tests · Mock + real BLE · MIT licensed" |
 
 ## Recording notes
 

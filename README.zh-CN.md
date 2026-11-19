@@ -27,7 +27,7 @@ ModuBLE/
 │   ├── Session/                    加密会话、事件流
 │   ├── Logging/                    结构化事件日志
 │   └── Demo/                       遥测格式、命令表、公开测试密钥
-├── Tests/ModuBLETests/             156 个 XCTest
+├── Tests/ModuBLETests/             168 个 XCTest
 ├── Documentation/
 │   ├── Peripheral-GATT.md          外设契约与协议定义
 │   ├── Device-Verification.md      真机验收清单与已验证记录
@@ -60,7 +60,7 @@ ModuBLE/
 
 ```bash
 swift build
-swift test          # 156 tests
+swift test          # 168 tests
 ```
 
 ### 已验证环境
@@ -72,7 +72,7 @@ swift test          # 156 tests
 | Swift | 6.4（swiftlang-6.4.0.34.1） |
 | Xcode | 27.0（27A266a） |
 | macOS | 27.0 |
-| `swift test` | 156 passed, 0 failed |
+| `swift test` | 168 passed, 0 failed |
 | `BLEPeripheralApp` | Debug 构建通过（无签名） |
 | `ModuBLEDemo` | iOS Simulator 构建通过（无签名） |
 
@@ -332,7 +332,7 @@ Notify，手机端 `PacketDecoder` 重组后解密，结果与原文逐字节一
 | `DeviceSession` / `DeviceManager` | ✅ 单会话生命周期、事件解析、掉线自动释放 |
 | iOS Demo | ✅ 四个 Tab + Diagnostics，Mock 路径无需硬件 |
 
-156 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
+168 个 XCTest 全绿（含 NIST SP 800-38A CBC 向量、防篡改、超时、并发拒绝、
 分片重组、中途切换算法）。
 
 **真机已验证**（iPhone ↔ macOS 外设，2026-11-14）：

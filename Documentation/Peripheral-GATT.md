@@ -137,7 +137,7 @@ AES-128-CBC   0x02 | IV (16)           | Ciphertext (n) | HMAC-SHA256 (32)
 | 加密 + 分包回显 | ✅ 1000 B 双向重组后逐字节一致 |
 | 断连自动重连 | ⬜ 代码完成，未做真机验证 |
 
-2026-11-19 复核：`swift test` 156 passed；`BLEPeripheralApp` 与 `ModuBLEDemo`
+2026-11-19 复核：`swift test` 168 passed；`BLEPeripheralApp` 与 `ModuBLEDemo`
 均可无签名构建通过（macOS 27 / Xcode 27 / Swift 6.4）。
 
 ## 7. 当前未实现（不要声称）
