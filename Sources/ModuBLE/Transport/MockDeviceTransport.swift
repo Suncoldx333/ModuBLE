@@ -40,6 +40,9 @@ public final class MockDeviceTransport: DeviceTransport, @unchecked Sendable {
     private var defaultFaults: FaultConfiguration
     private var scanContinuation: AsyncThrowingStream<[DiscoveredDevice], Error>.Continuation?
     private var currentLink: MockBLELink?
+    /// Guards the window between the "already active" check and the link being
+    /// published, which contains an `await stopScan()`.
+    private var isConnecting = false
 
     public init(
         profile: GATTProfile = .referencePeripheral,
@@ -101,9 +104,20 @@ public final class MockDeviceTransport: DeviceTransport, @unchecked Sendable {
         _ device: DiscoveredDevice,
         profile: GATTProfile
     ) async throws -> any DeviceLink {
-        if let existing = activeLink, !existing.isClosed {
+        // `stopScan()` below suspends, so check and claim the slot in one
+        // critical section. Otherwise two concurrent calls both pass the guard
+        // and the second overwrites `currentLink`.
+        let admitted = lock.withLock { () -> Bool in
+            if let existing = currentLink, !existing.isClosed { return false }
+            guard !isConnecting else { return false }
+            isConnecting = true
+            return true
+        }
+        guard admitted else {
             throw BLEError.connectionFailed("Another connection is already active")
         }
+        defer { lock.withLock { isConnecting = false } }
+
         guard let known = devices.first(where: { $0.id == device.id }) else {
             throw BLEError.peripheralNotFound
         }

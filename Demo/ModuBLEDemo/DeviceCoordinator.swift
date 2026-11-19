@@ -80,6 +80,10 @@ final class DeviceCoordinator: ObservableObject {
     private var eventTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var commandTask: Task<Void, Never>?
+    /// Tracks the manual connect task so cancel/disconnect can invalidate a
+    /// result that arrives after the user changed their mind.
+    private var connectTask: Task<Void, Never>?
+    private var connectGeneration = 0
 
     private var userInitiatedDisconnect = false
     private var hadSuccessfulConnection = false
@@ -185,18 +189,28 @@ final class DeviceCoordinator: ObservableObject {
             lastError = "Disconnect from the current peripheral first."
             return
         }
+        guard connectionState != .connecting else { return }
 
         cancelReconnection()
         userInitiatedDisconnect = false
         connectionState = .connecting
         lastError = nil
 
-        Task { [weak self] in
+        connectGeneration += 1
+        let generation = connectGeneration
+        connectTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let newSession = try await self.manager.connect(device)
+                // The user may have cancelled while the actor hop was in flight.
+                guard generation == self.connectGeneration,
+                      !Task.isCancelled else {
+                    await newSession.close()
+                    return
+                }
                 self.attach(newSession, device: device)
             } catch {
+                guard generation == self.connectGeneration else { return }
                 let message = DemoModel.describe(error)
                 if let ble = error as? BLEError, ble == .cancelled {
                     self.connectionState = .disconnected
@@ -209,6 +223,9 @@ final class DeviceCoordinator: ObservableObject {
     }
 
     func cancelConnect() {
+        connectGeneration += 1
+        connectTask?.cancel()
+        connectTask = nil
         connectionState = .disconnected
         Task { await manager.cancelPendingConnection() }
     }
@@ -294,6 +311,9 @@ final class DeviceCoordinator: ObservableObject {
 
     private func teardownSession() {
         userInitiatedDisconnect = true
+        connectGeneration += 1
+        connectTask?.cancel()
+        connectTask = nil
         sessionStateTask?.cancel()
         sessionStateTask = nil
         eventTask?.cancel()
@@ -430,13 +450,23 @@ final class DeviceCoordinator: ObservableObject {
                     // The manager may not have observed the close yet; a
                     // disconnect here is idempotent and avoids a false "busy".
                     await self.manager.disconnect()
+                    guard !Task.isCancelled else { return }
                     let newSession = try await self.manager.connect(device)
+                    // Cancelled between the manager returning and this point:
+                    // close the orphan instead of attaching it after the user
+                    // pressed "Stop Reconnecting".
+                    guard !Task.isCancelled else {
+                        await self.manager.disconnect()
+                        self.connectionState = .disconnected
+                        return
+                    }
                     self.reconnectTask = nil
                     self.reconnectTarget = nil
                     self.isReconnecting = false
                     self.attach(newSession, device: device)
                     return
                 } catch {
+                    if Task.isCancelled { return }
                     self.lastError = DemoModel.describe(error)
                 }
             }

@@ -183,6 +183,31 @@ final class EncryptedSessionConcurrencyTests: XCTestCase {
         }
     }
 
+    /// Regression for the window between the sequence check and `finish`.
+    ///
+    /// A's response is admitted and starts decrypting; A times out while the
+    /// decryption is still running; B then installs itself as the pending
+    /// request; when A's decryption finally completes it must not resolve B.
+    func testDecryptionFinishingAfterTimeoutDoesNotCompleteNextRequest() async throws {
+        let link = FakeBLELink()
+        let base = try AESGCMProvider(key: gcmKey)
+        let session = EncryptedSession(
+            link: link,
+            crypto: SlowDecryptProvider(base: base, seconds: 0.4),
+            timeout: .milliseconds(200)
+        )
+        EchoResponder(link: link, crypto: base).install()
+
+        let first = Task { try await session.request(Data("A".utf8)) }
+        // A has timed out; its response is still inside `decrypt`.
+        try await Task.sleep(for: .milliseconds(250))
+
+        let second = Task { try await session.request(Data("B".utf8)) }
+        let reply = try await second.value
+        XCTAssertEqual(reply, Data("B".utf8))
+        _ = try? await first.value
+    }
+
     // MARK: - Helpers
 
     static func waitUntil(
@@ -209,5 +234,23 @@ private struct ExpandingProvider: CryptoProvider {
 
     func decrypt(_ ciphertext: Data) throws -> Data {
         ciphertext
+    }
+}
+
+/// Wraps the real provider and blocks inside `decrypt`, so a test can make the
+/// response handler straddle a request timeout deterministically.
+private struct SlowDecryptProvider: CryptoProvider {
+    let base: AESGCMProvider
+    let seconds: TimeInterval
+
+    var algorithm: CryptoAlgorithm { base.algorithm }
+
+    func encrypt(_ plaintext: Data) throws -> Data {
+        try base.encrypt(plaintext)
+    }
+
+    func decrypt(_ ciphertext: Data) throws -> Data {
+        Thread.sleep(forTimeInterval: seconds)
+        return try base.decrypt(ciphertext)
     }
 }

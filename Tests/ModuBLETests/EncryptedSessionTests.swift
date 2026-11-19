@@ -82,8 +82,11 @@ final class EncryptedSessionTests: XCTestCase {
         }
     }
 
-    func testMismatchedSequenceIsRejected() async throws {
-        let (session, link, crypto) = try makeGCM()
+    /// A response for another sequence is stale or bogus. It must be dropped,
+    /// not turned into an error for the request that is actually waiting: the
+    /// peer may still answer that one in time.
+    func testStaleResponseIsDroppedInsteadOfFailingCurrentRequest() async throws {
+        let (session, link, crypto) = try makeGCM(timeout: .milliseconds(120))
         link.onWrite = { frame in
             guard let packet = try? PacketCodec().decode(frame),
                   let sealed = try? crypto.encrypt(Data("ACK".utf8)),
@@ -93,9 +96,68 @@ final class EncryptedSessionTests: XCTestCase {
             link.emit(response)
         }
 
-        await expectFailure(.unexpectedResponse(expected: 1, received: 2)) {
+        // Before the fix this failed immediately with `.unexpectedResponse`.
+        await expectFailure(.timedOut) {
             try await session.request(Data("START".utf8))
         }
+    }
+
+    /// Regression: after A timed out, B owns the pending slot. A's delayed
+    /// answer must neither complete B with A's payload nor fail it.
+    func testLateResponseFromTimedOutRequestDoesNotCompleteNextRequest() async throws {
+        let (session, link, crypto) = try makeGCM(timeout: .milliseconds(300))
+
+        do {
+            _ = try await session.request(Data("A".utf8))
+            XCTFail("expected timeout")
+        } catch let error as SessionError {
+            XCTAssertEqual(error, .timedOut)
+        }
+
+        let first = try XCTUnwrap(link.writtenPayloads.first)
+        let staleSequence = try PacketCodec().decode(first).sequence
+
+        let second = Task { try await session.request(Data("B".utf8)) }
+        let sent = await waitUntil(timeout: .seconds(1)) { link.writtenPayloads.count == 2 }
+        XCTAssertTrue(sent, "the second request was never written")
+        let secondSequence = try PacketCodec().decode(link.writtenPayloads[1]).sequence
+
+        // Deliver A's answer, then B's. B must see only its own payload.
+        link.emit(try responseFrame(sequence: staleSequence, plaintext: Data("STALE".utf8), crypto: crypto))
+        link.emit(try responseFrame(sequence: secondSequence, plaintext: Data("B_ACK".utf8), crypto: crypto))
+
+        let reply = try await second.value
+        XCTAssertEqual(reply, Data("B_ACK".utf8))
+    }
+
+    /// Same window, but A's late answer fails authentication. B must survive.
+    func testCorruptLateResponseDoesNotFailNextRequest() async throws {
+        let (session, link, crypto) = try makeGCM(timeout: .milliseconds(300))
+
+        do {
+            _ = try await session.request(Data("A".utf8))
+            XCTFail("expected timeout")
+        } catch let error as SessionError {
+            XCTAssertEqual(error, .timedOut)
+        }
+
+        let staleSequence = try PacketCodec().decode(link.writtenPayloads[0]).sequence
+
+        let second = Task { try await session.request(Data("B".utf8)) }
+        let sent = await waitUntil(timeout: .seconds(1)) { link.writtenPayloads.count == 2 }
+        XCTAssertTrue(sent, "the second request was never written")
+        let secondSequence = try PacketCodec().decode(link.writtenPayloads[1]).sequence
+
+        let stale = try responseFrame(
+            sequence: staleSequence,
+            plaintext: Data("STALE".utf8),
+            crypto: crypto
+        )
+        link.emit(Self.tampered(stale))
+        link.emit(try responseFrame(sequence: secondSequence, plaintext: Data("B_ACK".utf8), crypto: crypto))
+
+        let reply = try await second.value
+        XCTAssertEqual(reply, Data("B_ACK".utf8))
     }
 
     func testConcurrentRequestIsRejected() async throws {
@@ -200,6 +262,24 @@ final class EncryptedSessionTests: XCTestCase {
         let crypto = try AESGCMProvider(key: gcmKey)
         let session = EncryptedSession(link: link, crypto: crypto, timeout: timeout)
         return (session, link, crypto)
+    }
+
+    private func responseFrame(
+        sequence: UInt32,
+        plaintext: Data,
+        crypto: any CryptoProvider
+    ) throws -> Data {
+        let sealed = try crypto.encrypt(plaintext)
+        return try PacketCodec().encode(
+            Packet(kind: .response, sequence: sequence, payload: sealed)
+        )
+    }
+
+    private func waitUntil(
+        timeout: Duration,
+        _ condition: @escaping @Sendable () -> Bool
+    ) async -> Bool {
+        await EncryptedSessionConcurrencyTests.waitUntil(timeout: timeout, condition)
     }
 
     private func expectFailure(

@@ -6,7 +6,8 @@ import Foundation
 /// Responsibilities:
 /// - encrypt the request, wrap it in a `Packet`, and write it through the link;
 /// - reassemble inbound bytes into packets, match the response by sequence,
-///   verify and decrypt it;
+///   verify and decrypt it; a late or duplicate response is logged and dropped
+///   instead of resolving the request that is currently in flight;
 /// - decrypt unsolicited `event` frames and publish them on `events`;
 /// - bound every request with a timeout so a silent peripheral cannot hang a
 ///   caller.
@@ -16,6 +17,10 @@ import Foundation
 /// logic impossible to get wrong. Concurrent callers get `SessionError.busy`.
 public final class EncryptedSession: @unchecked Sendable {
     private struct Pending {
+        /// Monotonic identity, allocated with the sequence reservation. It
+        /// survives sequence wrap-around, so a response can only ever resolve
+        /// the request it belongs to.
+        let id: UInt64
         let sequence: UInt32
         let continuation: CheckedContinuation<Data, Error>
         let timeoutTask: Task<Void, Never>
@@ -46,6 +51,8 @@ public final class EncryptedSession: @unchecked Sendable {
     /// Visible to other callers under the same lock, which closes the window
     /// where two concurrent `request()` calls both observe `pending == nil`.
     private var reservedSequence: UInt32?
+    private var reservedRequestID: UInt64?
+    private var nextRequestID: UInt64 = 0
     private var nextSequence: UInt32 = 1
     private var started = false
     private var closed = false
@@ -116,12 +123,12 @@ public final class EncryptedSession: @unchecked Sendable {
             throw SessionError.crypto(error)
         }
 
-        let sequence = try reserveSequence()
+        let (requestID, sequence) = try reserveSequence()
         let frame: Data
         do {
             frame = try codec.encode(Packet(kind: .request, sequence: sequence, payload: sealed))
         } catch let error as PacketError {
-            releaseReservation(sequence)
+            releaseReservation(requestID)
             throw SessionError.framing(error)
         }
 
@@ -137,16 +144,20 @@ public final class EncryptedSession: @unchecked Sendable {
                 try? await Task.sleep(for: self.timeout)
                 guard !Task.isCancelled else { return }
                 self.logStore?.log(.warning, .session, "Request #\(sequence) timed out")
-                self.finish(.failure(SessionError.timedOut), onlyIfSequence: sequence)
+                self.finish(.failure(SessionError.timedOut), onlyIf: requestID)
             }
 
             // Promote the reservation to a real pending slot atomically. Two
             // callers can no longer overwrite each other, and if the session
             // closed in between the caller is resumed instead of leaking.
             let admitted = lock.withLock { () -> Bool in
-                guard !closed, reservedSequence == sequence else { return false }
+                guard !closed,
+                      reservedSequence == sequence,
+                      reservedRequestID == requestID else { return false }
                 reservedSequence = nil
+                reservedRequestID = nil
                 pending = Pending(
+                    id: requestID,
                     sequence: sequence,
                     continuation: continuation,
                     timeoutTask: timeoutTask
@@ -164,9 +175,9 @@ public final class EncryptedSession: @unchecked Sendable {
                 do {
                     try await self.link.write(frame)
                 } catch let error as BLEError {
-                    self.finish(.failure(SessionError.transport(error)), onlyIfSequence: sequence)
+                    self.finish(.failure(SessionError.transport(error)), onlyIf: requestID)
                 } catch {
-                    self.finish(.failure(SessionError.closed), onlyIfSequence: sequence)
+                    self.finish(.failure(SessionError.closed), onlyIf: requestID)
                 }
             }
         }
@@ -178,6 +189,7 @@ public final class EncryptedSession: @unchecked Sendable {
             let wasClosed = closed
             closed = true
             reservedSequence = nil
+            reservedRequestID = nil
             return wasClosed
         }
         guard !alreadyClosed else { return }
@@ -236,6 +248,7 @@ public final class EncryptedSession: @unchecked Sendable {
         lock.withLock {
             closed = true
             reservedSequence = nil
+            reservedRequestID = nil
         }
         finish(.failure(SessionError.closed))
         eventContinuation.finish()
@@ -245,22 +258,28 @@ public final class EncryptedSession: @unchecked Sendable {
     private func handle(_ packet: Packet) {
         switch packet.kind {
         case .response:
-            let current = lock.withLock { pending }
-            guard let current else {
+            guard let snapshot = lock.withLock({ pending }) else {
                 logStore?.log(.warning, .session, "Response #\(packet.sequence) with no pending request")
                 return
             }
-            guard current.sequence == packet.sequence else {
-                finish(
-                    .failure(
-                        SessionError.unexpectedResponse(
-                            expected: current.sequence,
-                            received: packet.sequence
-                        )
-                    )
+            guard snapshot.sequence == packet.sequence else {
+                // Late or duplicate response, e.g. for a request that already
+                // timed out. It must never resolve or fail the request that is
+                // currently in flight: that caller is still waiting for its own
+                // answer, and the peer may deliver it in time.
+                logStore?.log(
+                    .warning,
+                    .session,
+                    "Dropped stale response #\(packet.sequence) while #\(snapshot.sequence) is pending"
                 )
                 return
             }
+
+            // Check the id and remove the pending slot in one critical section.
+            // From here on timeout, close and write-failure can no longer
+            // resolve this caller, and no later request can inherit its answer.
+            guard let claimed = claim(snapshot.id) else { return }
+            claimed.timeoutTask.cancel()
 
             let provider = cryptoLock.withLock { crypto }
             do {
@@ -271,11 +290,11 @@ public final class EncryptedSession: @unchecked Sendable {
                     "Decrypted response #\(packet.sequence) · \(plaintext.count) B",
                     payload: plaintext
                 )
-                finish(.success(plaintext))
+                claimed.continuation.resume(returning: plaintext)
             } catch let error as CryptoError {
-                finish(.failure(SessionError.crypto(error)))
+                claimed.continuation.resume(throwing: SessionError.crypto(error))
             } catch {
-                finish(.failure(SessionError.crypto(.malformedEnvelope)))
+                claimed.continuation.resume(throwing: SessionError.crypto(.malformedEnvelope))
             }
 
         case .event:
@@ -318,24 +337,27 @@ public final class EncryptedSession: @unchecked Sendable {
     // MARK: - Pending request bookkeeping
 
     private enum Reservation {
-        case reserved(UInt32)
+        case reserved(id: UInt64, sequence: UInt32)
         case busy
         case closed
     }
 
-    private func reserveSequence() throws -> UInt32 {
+    private func reserveSequence() throws -> (id: UInt64, sequence: UInt32) {
         let reservation = lock.withLock { () -> Reservation in
             if closed { return .closed }
             guard pending == nil, reservedSequence == nil else { return .busy }
             let sequence = nextSequence
             nextSequence = sequence == .max ? 1 : sequence + 1
+            nextRequestID &+= 1
+            let id = nextRequestID
             reservedSequence = sequence
-            return .reserved(sequence)
+            reservedRequestID = id
+            return .reserved(id: id, sequence: sequence)
         }
 
         switch reservation {
-        case .reserved(let sequence):
-            return sequence
+        case .reserved(let id, let sequence):
+            return (id, sequence)
         case .busy:
             throw SessionError.busy
         case .closed:
@@ -345,16 +367,29 @@ public final class EncryptedSession: @unchecked Sendable {
 
     /// Gives a reserved sequence back after a local failure (framing), so the
     /// session does not stay permanently `busy`.
-    private func releaseReservation(_ sequence: UInt32) {
+    private func releaseReservation(_ requestID: UInt64) {
         lock.withLock {
-            if reservedSequence == sequence { reservedSequence = nil }
+            if reservedRequestID == requestID {
+                reservedSequence = nil
+                reservedRequestID = nil
+            }
         }
     }
 
-    private func finish(_ result: Result<Data, Error>, onlyIfSequence: UInt32? = nil) {
+    /// Removes `pending` only if it still belongs to `id`. This is the single
+    /// atomic point where a response takes ownership of a waiting caller.
+    private func claim(_ requestID: UInt64) -> Pending? {
+        lock.withLock {
+            guard let current = pending, current.id == requestID else { return nil }
+            pending = nil
+            return current
+        }
+    }
+
+    private func finish(_ result: Result<Data, Error>, onlyIf requestID: UInt64? = nil) {
         let resolved: Pending? = lock.withLock {
             guard let current = pending else { return nil }
-            if let sequence = onlyIfSequence, current.sequence != sequence {
+            if let requestID, current.id != requestID {
                 return nil
             }
             pending = nil
@@ -367,8 +402,13 @@ public final class EncryptedSession: @unchecked Sendable {
     }
 
     deinit {
-        pending?.timeoutTask.cancel()
-        pending?.continuation.resume(throwing: SessionError.closed)
+        let resolved: Pending? = lock.withLock {
+            let current = pending
+            pending = nil
+            return current
+        }
+        resolved?.timeoutTask.cancel()
+        resolved?.continuation.resume(throwing: SessionError.closed)
         eventContinuation.finish()
     }
 }
