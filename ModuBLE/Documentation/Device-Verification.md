@@ -1,4 +1,4 @@
-# 真机联调清单（阶段 2 / 阶段 3 验收）
+# 真机联调清单
 
 > 目标：验证 `ModuBLE` 的 BLE 传输层能真实扫描、连接、订阅、双模式写入，
 > 并确认"写入的内容"与"外设收到的内容"一致。
@@ -171,6 +171,16 @@ Mac 控制台会标出算法：
 | AES-128-CBC + HMAC 闭环 | ✅ 连接中切换到 CBC（不重连），`START` → 75 B 帧 → `START_ACK` |
 | 加密 + 分包回显 | ✅ 1000 B → 1029 B 信封 → 512+512+15 写入 → 外设回显 → 分片 Notify → 解密后 1000 B 完全一致 |
 | 断连重连 | ⬜ 待验证（需 Cmd+Q 退出 Mac App，Stop Advertising 不会断连） |
+
+2026-11-19 复核（未接真机，仅构建与单测）：
+
+| 项 | 结果 |
+|---|---|
+| `swift test` | ✅ 83 passed, 0 failed |
+| `BLEPeripheralApp` Debug 构建 | ✅ 通过（`CODE_SIGNING_ALLOWED=NO`，macOS 27 / Xcode 27） |
+| `ModuBLEDemo` iOS Simulator 构建 | ✅ 通过（同上） |
+
+> 上面两行只证明工程可编译、单测可通过，**不构成真机验证**。
 
 ## 4. 需要回报的信息
 
